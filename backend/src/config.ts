@@ -225,7 +225,8 @@ function parseTokenConfig(raw: string, network: SupportedNetwork): Record<string
 function normalizeTokenDecimals(token: Pick<TokenConfig, "symbol" | "decimals" | "kind">, network: SupportedNetwork): number {
   const symbol = token.symbol.toUpperCase();
   const isDemoIntegerToken = network !== "mainnet"
-    && (token.kind === "mock" || token.kind === "ekubo_controlled_test" || symbol.endsWith("_TEST"));
+    && token.kind === "mock"
+    && symbol === "SBTC_TEST";
   return isDemoIntegerToken ? 0 : token.decimals;
 }
 
