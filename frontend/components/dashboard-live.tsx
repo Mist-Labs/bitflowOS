@@ -353,6 +353,7 @@ function PositionActions({ wallet, externalVaultState }: { wallet: WalletState; 
 }
 
 function summarizeVault(state: VaultState | null) {
+  const displayDecimals = 8;
   if (!state?.assets.length) {
     return {
       totalAssetsRaw: 0n,
@@ -366,19 +367,25 @@ function summarizeVault(state: VaultState | null) {
   const primary = state.assets.find(asset => toBigInt(asset.totalAssets) > 0n)
     ?? state.assets.find(asset => toBigInt(asset.userShares) > 0n || toBigInt(asset.userAssetShares) > 0n)
     ?? state.assets[0];
-  const totalAssetsRaw = state.assets.reduce((sum, asset) => sum + toBigInt(asset.totalAssets), 0n);
-  const userAssetSharesRaw = state.assets.reduce((sum, asset) => sum + toBigInt(asset.userAssetShares), 0n);
+  const totalAssetsRaw = state.assets.reduce(
+    (sum, asset) => sum + normalizeToDecimals(toBigInt(asset.totalAssets), asset.decimals, displayDecimals),
+    0n
+  );
+  const userAssetSharesRaw = state.assets.reduce(
+    (sum, asset) => sum + normalizeToDecimals(toBigInt(asset.userAssetShares), asset.decimals, displayDecimals),
+    0n
+  );
   const globalUserSharesRaw = state.assets.reduce((max, asset) => {
-    const shares = toBigInt(asset.userShares);
+    const shares = normalizeToDecimals(toBigInt(asset.userShares), asset.decimals, displayDecimals);
     return shares > max ? shares : max;
   }, 0n);
   const userSharesRaw = userAssetSharesRaw > 0n ? userAssetSharesRaw : globalUserSharesRaw;
 
   return {
     totalAssetsRaw,
-    totalAssetsLabel: totalAssetsRaw > 0n ? compactUnits(totalAssetsRaw, primary.decimals) : "--",
+    totalAssetsLabel: totalAssetsRaw > 0n ? compactUnits(totalAssetsRaw, displayDecimals) : "--",
     userManagedRaw: userSharesRaw,
-    userManagedLabel: userSharesRaw > 0n ? compactUnits(userSharesRaw, primary.decimals) : "--",
+    userManagedLabel: userSharesRaw > 0n ? compactUnits(userSharesRaw, displayDecimals) : "--",
     primarySymbol: primary.symbol
   };
 }
@@ -422,6 +429,12 @@ function compactUnits(value: bigint, decimals: number) {
   const firstNonZero = raw.search(/[1-9]/);
   if (firstNonZero === -1) return "0";
   return `0.${raw.slice(0, Math.min(decimals, firstNonZero + 4)).replace(/0+$/, "")}`;
+}
+
+function normalizeToDecimals(value: bigint, fromDecimals: number, toDecimals: number) {
+  if (value === 0n || fromDecimals === toDecimals) return value;
+  if (fromDecimals > toDecimals) return value / (10n ** BigInt(fromDecimals - toDecimals));
+  return value * (10n ** BigInt(toDecimals - fromDecimals));
 }
 
 function compactWhole(value: bigint) {
