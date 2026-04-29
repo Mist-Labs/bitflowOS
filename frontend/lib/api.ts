@@ -174,6 +174,27 @@ export async function createRecommendation(input: {
   return response.json() as Promise<AllocationRecommendation>;
 }
 
+export async function deployCapital(input: {
+  recommendation: AllocationRecommendation;
+}): Promise<{
+  status: "submitted" | "skipped";
+  transactionHash?: string;
+  attestationHash?: string;
+  message: string;
+  weights: Array<{ strategyId: string; asset: string; targetBps: number; label: string }>;
+}> {
+  const response = await fetch(`${API_URL}/api/ai/deploy-capital`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null) as { message?: string } | null;
+    throw new Error(detail?.message ?? "Unable to deploy capital on-chain");
+  }
+  return response.json();
+}
+
 export async function getPrivyStarknetWallet(input: {
   userId: string;
 }): Promise<{

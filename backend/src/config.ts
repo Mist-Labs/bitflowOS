@@ -26,6 +26,8 @@ const EnvSchema = z.object({
   BACKEND_DATA_DIR: z.string().optional(),
   STARKNET_NETWORK: z.enum(["mainnet", "sepolia", "devnet"]).default("mainnet"),
   STARKNET_RPC_URL: z.string().url(),
+  STARKNET_ACCOUNT_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]+$/).or(z.literal("")).optional().default(""),
+  STARKNET_PRIVATE_KEY: z.string().regex(/^0x[0-9a-fA-F]+$/).or(z.literal("")).optional().default(""),
   BITFLOWOS_VAULT_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]+$/),
   BITFLOWOS_ATTESTATION_REGISTRY_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]+$/).or(z.literal("")).default(""),
   BITFLOWOS_STRATEGY_ROUTER_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]+$/).or(z.literal("")).default(""),
@@ -73,6 +75,8 @@ export interface AppConfig {
   corsOrigin: string;
   starknetNetwork: SupportedNetwork;
   starknetRpcUrl: string;
+  starknetAccountAddress: string;
+  starknetPrivateKey: string;
   bitflowosVaultAddress: string;
   bitflowosAttestationRegistryAddress: string;
   bitflowosStrategyRouterAddress: string;
@@ -124,6 +128,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     corsOrigin: parsed.BACKEND_CORS_ORIGIN ?? parsed.CORS_ORIGIN ?? "http://localhost:3000",
     starknetNetwork: parsed.STARKNET_NETWORK,
     starknetRpcUrl: parsed.STARKNET_RPC_URL,
+    starknetAccountAddress: parsed.STARKNET_ACCOUNT_ADDRESS,
+    starknetPrivateKey: parsed.STARKNET_PRIVATE_KEY,
     bitflowosVaultAddress: parsed.BITFLOWOS_VAULT_ADDRESS,
     bitflowosAttestationRegistryAddress: parsed.BITFLOWOS_ATTESTATION_REGISTRY_ADDRESS,
     bitflowosStrategyRouterAddress: parsed.BITFLOWOS_STRATEGY_ROUTER_ADDRESS,

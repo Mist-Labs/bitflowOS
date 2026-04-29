@@ -11,6 +11,7 @@ import { KimiRecommendationService } from "./services/kimi.js";
 import { ZeroGVerifierService } from "./services/zeroGVerifier.js";
 import { UserProfileService } from "./services/userProfiles.js";
 import { PrivyStarkZapService } from "./services/privyStarkZap.js";
+import { CapitalDeploymentService } from "./services/capitalDeployment.js";
 
 const BtcBridgeQuoteSchema = z.object({
   amountSats: z.string().regex(/^[1-9]\d*$/),
@@ -81,6 +82,39 @@ const RecommendationSchema = z.object({
   amountBaseUnits: z.string().regex(/^[1-9]\d*$/).optional()
 });
 
+const CapitalDeploySchema = z.object({
+  recommendation: z.object({
+    id: z.string(),
+    walletAddress: z.string().optional(),
+    assetSymbol: z.string(),
+    status: z.enum(["ready", "fallback", "blocked"]),
+    confidenceBps: z.number().int().min(0).max(10000),
+    weights: z.array(z.object({
+      strategyId: z.string(),
+      label: z.string(),
+      targetBps: z.number().int().min(0).max(10000),
+      rationale: z.string()
+    })),
+    riskChecks: z.array(z.object({
+      id: z.string(),
+      label: z.string(),
+      passed: z.boolean(),
+      detail: z.string()
+    })),
+    reasoning: z.string(),
+    attestation: z.object({
+      provider: z.string(),
+      verified: z.boolean(),
+      verificationMode: z.enum(["0g", "external", "not_configured"]),
+      chatId: z.string().optional(),
+      providerAddress: z.string().optional(),
+      attestationHash: z.string().optional(),
+      setupRequired: z.array(z.string()).optional()
+    }),
+    createdAt: z.string()
+  })
+});
+
 const ZeroGVerifySchema = z.object({
   providerAddress: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   chatId: z.string().optional()
@@ -102,6 +136,7 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
   const zeroG = new ZeroGVerifierService(config);
   const profiles = new UserProfileService(config);
   const privyStarkZap = new PrivyStarkZapService(config);
+  const capitalDeployment = new CapitalDeploymentService(config);
 
   app.get("/health", async () => ({
     ok: true,
@@ -222,6 +257,11 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
   app.post("/api/ai/recommendation", async request => {
     const input = RecommendationSchema.parse(request.body);
     return kimi.recommend(input);
+  });
+
+  app.post("/api/ai/deploy-capital", async request => {
+    const input = CapitalDeploySchema.parse(request.body);
+    return capitalDeployment.deploy(input);
   });
 
   app.post("/api/ai/verify", async request => {

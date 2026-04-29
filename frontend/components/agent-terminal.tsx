@@ -1,6 +1,6 @@
 "use client";
 
-import { createRecommendation, getUserProfile, getVaultState, setFarcasterUsername } from "@/lib/api";
+import { createRecommendation, deployCapital, getUserProfile, getVaultState, setFarcasterUsername } from "@/lib/api";
 import type { AllocationRecommendation, VaultState } from "@/lib/types";
 import { Bot, SendHorizonal, TerminalSquare } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -207,10 +207,8 @@ export function AgentTerminal() {
       }
       setStep("deploying");
       setBusy(true);
-      setMessages(current => [...current, "deploying capital..."]);
-      window.setTimeout(() => {
-        void checkFarcasterAfterDeploy();
-      }, 1200);
+      setMessages(current => [...current, "Deploying capital on-chain through the BitflowOS router executor..."]);
+      await deployApprovedRecommendation();
       return;
     }
 
@@ -340,21 +338,50 @@ export function AgentTerminal() {
       }
 
       await sleep(700);
-      setStep("deploying");
+      setStep("confirm");
       setMessages(current => [
         ...current,
-        "Capital plan staged: BTC lending 42%, BTC liquid staking 26%, liquidity route held at 0% until quote checks are live, idle reserve 20%.",
-        "Router read state refreshed. Dashboard totals are updating from the vault feed now."
+        "Capital plan prepared from Kimi weights and 0G verification.",
+        "Type `confirm` to submit the attestation and execute the router rebalance on-chain."
       ]);
       window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
-        detail: { stage: "plan_staged", recommendation: rec, timestamp: new Date().toISOString() }
+        detail: { stage: "recommendation_ready", recommendation: rec, timestamp: new Date().toISOString() }
       }));
-
-      await sleep(500);
-      await checkFarcasterAfterDeploy();
     } catch (error) {
       setStep("deposit");
       pushOnce(`Strategy setup paused: ${(error as Error).message}.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deployApprovedRecommendation() {
+    if (!recommendation) {
+      setBusy(false);
+      setStep("allocating");
+      pushOnce("No approved Kimi recommendation is available yet. I need to rebuild the plan before deployment.");
+      return;
+    }
+
+    try {
+      const result = await deployCapital({ recommendation });
+      if (result.status === "skipped") {
+        setMessages(current => [...current, result.message]);
+      } else {
+        setMessages(current => [
+          ...current,
+          `Router rebalance submitted: ${short(result.transactionHash ?? "")}.`,
+          `Attestation ${short(result.attestationHash ?? "")} accepted for ${result.weights.map(item => `${item.label} ${Math.round(item.targetBps / 100)}%`).join(", ")}.`
+        ]);
+      }
+      window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
+        detail: { stage: "plan_staged", recommendation, timestamp: new Date().toISOString(), txHash: result.transactionHash }
+      }));
+      window.dispatchEvent(new CustomEvent("bitflowos:vault-refresh"));
+      await checkFarcasterAfterDeploy();
+    } catch (error) {
+      setStep("confirm");
+      pushOnce(`Capital deployment failed before completion: ${(error as Error).message}`);
     } finally {
       setBusy(false);
     }
