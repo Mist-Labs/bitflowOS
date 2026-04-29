@@ -9,6 +9,16 @@ import type {
   TokenConfig
 } from "./types.js";
 
+const EnvBoolean = z.preprocess(value => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(normalized)) return true;
+    if (["false", "0", "no", "off", ""].includes(normalized)) return false;
+  }
+  return value;
+}, z.boolean());
+
 dotenv.config();
 const rootEnvPath = resolve(process.cwd(), "../.env");
 if (existsSync(rootEnvPath)) {
@@ -53,7 +63,7 @@ const EnvSchema = z.object({
   FARCASTER_APP_URL: z.string().url().default("http://localhost:3000"),
   SMTP_SERVER: z.string().optional().default(""),
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
-  SMTP_SECURE: z.coerce.boolean().default(false),
+  SMTP_SECURE: EnvBoolean.default(false),
   SMTP_USERNAME: z.string().optional().default(""),
   SMTP_PASSWORD: z.string().optional().default(""),
   FROM_EMAIL: z.string().email().or(z.literal("")).default(""),

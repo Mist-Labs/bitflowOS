@@ -48,6 +48,8 @@ export function DepositModal({ tokens, vaultState }: { tokens: TokenConfig[]; va
     ? "BTC -> Atomiq -> SBTC -> Vault"
     : `${asset} -> StarkZap -> Vault`;
   const liveAsset = userVaultState?.assets.find(item => item.symbol.toUpperCase() === normalizedAsset);
+  const selectedToken = tokens.find(item => item.symbol.toUpperCase() === normalizedAsset);
+  const tokenDecimals = liveAsset?.decimals ?? selectedToken?.decimals ?? 18;
   const walletBalance = liveAsset?.userWalletBalance ?? "0";
   const walletAddress = wallet?.address ?? (typeof window === "undefined" ? "" : readWalletAddress());
   const tokenAssets = tokens.map(item => item.symbol);
@@ -144,13 +146,13 @@ export function DepositModal({ tokens, vaultState }: { tokens: TokenConfig[]; va
 
       const calls = await buildDepositCalls({
         tokenSymbol: asset,
-        amountBaseUnits: amount || "0"
+        amountBaseUnits: decimalToBaseUnits(amount || "0", tokenDecimals)
       });
       const execution = await executeStarknetMulticallViaStarkZap(calls.calls);
       const detail = {
         walletAddress,
         tokenSymbol: asset,
-        amountBaseUnits: amount || "0",
+        amountBaseUnits: decimalToBaseUnits(amount || "0", tokenDecimals),
         transactionHash: execution.hash,
         route: execution.route,
         callCount: execution.callCount
@@ -365,6 +367,22 @@ function formatReceive(value: string) {
 
 function readWalletAddress() {
   return readWalletSnapshot()?.address ?? "";
+}
+
+function decimalToBaseUnits(value: string, decimals: number) {
+  const trimmed = value.trim();
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+    throw new Error("Enter a valid deposit amount.");
+  }
+  const [whole, fraction = ""] = trimmed.split(".");
+  if (fraction.length > decimals) {
+    throw new Error(`Amount supports up to ${decimals} decimals for this asset.`);
+  }
+  const base = `${whole}${fraction.padEnd(decimals, "0")}`.replace(/^0+(?=\d)/, "");
+  if (!base || BigInt(base) <= 0n) {
+    throw new Error("Enter an amount greater than zero.");
+  }
+  return base;
 }
 
 function readWalletSnapshot(): WalletSnapshot {
