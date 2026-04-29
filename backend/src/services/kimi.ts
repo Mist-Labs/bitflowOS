@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { AppConfig } from "../config.js";
 import type { AllocationRecommendation } from "../types.js";
 import { ZeroGVerifierService } from "./zeroGVerifier.js";
-import { isIdleAllocation } from "./capitalDeployment.js";
+import { getExecutionGateReason, isIdleAllocation } from "./capitalDeployment.js";
 
 type RecommendationInput = {
   walletAddress?: string;
@@ -99,7 +99,7 @@ export class KimiRecommendationService {
               assetSymbol,
               amountBaseUnits: input.amountBaseUnits,
               walletAddress: input.walletAddress,
-              strategies: Object.values(this.config.strategyRoutes),
+              strategies: this.getRecommendationRoutes(),
               tokens: Object.values(this.config.tokens)
             })
           }
@@ -216,7 +216,7 @@ export class KimiRecommendationService {
   }
 
   private buildPolicyBoundFallback(input: RecommendationInput, assetSymbol: string, createdAt: string): AllocationRecommendation {
-    const routes = Object.values(this.config.strategyRoutes).filter(route => route.enabled);
+    const routes = this.getRecommendationRoutes();
     const primary = routes[0];
     const primaryBps = primary ? Math.min(4000, primary.maxBps, this.config.policy.maxStrategyBps) : 0;
     const idleBps = 10000 - primaryBps;
@@ -263,6 +263,11 @@ export class KimiRecommendationService {
       },
       createdAt
     };
+  }
+
+  private getRecommendationRoutes() {
+    return Object.values(this.config.strategyRoutes)
+      .filter(route => route.enabled && route.executionEnabled && !getExecutionGateReason(route));
   }
 }
 

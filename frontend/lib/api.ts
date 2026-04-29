@@ -182,6 +182,7 @@ export async function deployCapital(input: {
   attestationHash?: string;
   message: string;
   weights: Array<{ strategyId: string; asset: string; targetBps: number; label: string }>;
+  skippedWeights?: Array<{ strategyId: string; targetBps: number; label: string; reason: string }>;
 }> {
   const response = await fetch(`${API_URL}/api/ai/deploy-capital`, {
     method: "POST",

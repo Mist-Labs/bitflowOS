@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CapitalDeploymentService, isIdleAllocation } from "../src/services/capitalDeployment.js";
+import { CapitalDeploymentService, getExecutionGateReason, isIdleAllocation } from "../src/services/capitalDeployment.js";
 import { loadConfig } from "../src/config.js";
 import type { AllocationRecommendation } from "../src/types.js";
 
@@ -72,5 +72,82 @@ describe("allocation normalization", () => {
     expect(weights).toEqual([
       expect.objectContaining({ strategyId: "0x45524334363236", targetBps: 6000 })
     ]);
+  });
+
+  it("gates quote-required routes before Starknet fee estimation", async () => {
+    const config = loadConfig({
+      STARKNET_RPC_URL: "https://starknet-mainnet.public.blastapi.io/rpc/v0_7",
+      STARKNET_ACCOUNT_ADDRESS: "0x123",
+      STARKNET_PRIVATE_KEY: "0x456",
+      BITFLOWOS_VAULT_ADDRESS: "0x789",
+      BITFLOWOS_ATTESTATION_REGISTRY_ADDRESS: "0xabc",
+      BITFLOWOS_STRATEGY_ROUTER_ADDRESS: "0xdef",
+      SUPPORTED_TOKENS_JSON: JSON.stringify({
+        SBTC_TEST: {
+          symbol: "SBTC_TEST",
+          address: "0x111",
+          decimals: 18,
+          enabled: true
+        }
+      }),
+      STRATEGY_ROUTES_JSON: JSON.stringify({
+        EKUBO: {
+          id: "0x454b4232",
+          label: "Ekubo Controlled sBTC Test Route",
+          adapterAddress: "0x222",
+          maxBps: 1500,
+          assetSymbol: "SBTC_TEST",
+          enabled: true,
+          kind: "ekubo",
+          executionEnabled: true,
+          quoteRequired: true,
+          uiEnabled: false
+        }
+      })
+    });
+    const service = new CapitalDeploymentService(config);
+    const recommendation: AllocationRecommendation = {
+      id: "test",
+      assetSymbol: "SBTC_TEST",
+      status: "ready",
+      confidenceBps: 7000,
+      weights: [
+        { strategyId: "EKB2", label: "Ekubo Controlled sBTC Test Route", targetBps: 1200, rationale: "route" },
+        { strategyId: "IDLE", label: "Idle Reserve", targetBps: 8800, rationale: "idle" }
+      ],
+      riskChecks: [],
+      reasoning: "test",
+      attestation: {
+        provider: "0g",
+        verified: true,
+        verificationMode: "0g"
+      },
+      createdAt: new Date().toISOString()
+    };
+
+    const result = await service.deploy({ recommendation });
+
+    expect(result.status).toBe("skipped");
+    expect(result.calls).toEqual([]);
+    expect(result.skippedWeights).toEqual([
+      expect.objectContaining({
+        label: "Ekubo Controlled sBTC Test Route",
+        reason: "route requires a live quote and slippage preflight"
+      })
+    ]);
+  });
+
+  it("explains why quote-required routes are gated", () => {
+    expect(getExecutionGateReason({
+      id: "0x1",
+      label: "Ekubo",
+      adapterAddress: "0x2",
+      maxBps: 1000,
+      assetSymbol: "SBTC_TEST",
+      enabled: true,
+      kind: "ekubo",
+      executionEnabled: true,
+      quoteRequired: true
+    })).toBe("route requires a live quote and slippage preflight");
   });
 });

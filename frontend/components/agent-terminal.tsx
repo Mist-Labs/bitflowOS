@@ -415,7 +415,10 @@ export function AgentTerminal() {
           const merged = [
             ...current,
             `Router rebalance submitted: ${result.transactionHash ?? "transaction hash pending"}.`,
-            `Attestation ${short(result.attestationHash ?? "")} accepted for ${result.weights.map(item => `${item.label} ${Math.round(item.targetBps / 100)}%`).join(", ")}.`
+            `Attestation ${short(result.attestationHash ?? "")} accepted for ${result.weights.map(item => `${item.label} ${Math.round(item.targetBps / 100)}%`).join(", ")}.`,
+            ...(result.skippedWeights?.length
+              ? [`Gated routes stayed idle: ${result.skippedWeights.map(item => `${item.label} ${Math.round(item.targetBps / 100)}% (${item.reason})`).join(", ")}.`]
+              : [])
           ];
           saveAgentSession("done", recommendation, merged);
           return merged;

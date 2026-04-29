@@ -1,10 +1,27 @@
 # BitflowOS
 
-Verifiable AI Bitcoin yield operating system on Starknet.
+**Verifiable AI Bitcoin yield, on Starknet.**
 
-BitflowOS is a non-custodial BTCFi vault and allocation agent for Starknet. Users deposit supported BTC wrapper assets, receive vault shares, and let a policy-bound AI agent prepare risk-aware strategy allocations. Recommendations are verified through the configured 0G attestation path and, after explicit human confirmation, the backend executor submits the on-chain attestation and router rebalance transaction.
+BitflowOS is the first BTCFi vault where the AI agent's decisions are hardware-attested before any capital moves. Users deposit BTC wrapper assets, and a policy-bound Kimi agent prepares risk-aware yield allocations across Vesu, Endur, and Ekubo. Every recommendation is verified through a 0G Sealed Inference TEE before it reaches the chain — no blind trust, no black box.
 
-The project also includes native Bitcoin onboarding through Atomiq, Starkzap wallet execution, Privy and Cartridge onboarding surfaces, Farcaster Mini App alerts, and Postgres-backed user/profile/alert persistence.
+> **Live on Starknet Sepolia** · [bitflow-os.vercel.app](https://bitflow-os.vercel.app)
+
+---
+
+## How It Works
+
+```
+Deposit BTC wrapper
+  → Kimi generates yield allocation
+  → 0G TEE attestation verifies the recommendation
+  → You confirm
+  → Backend submits attestation + router rebalance in one tx
+  → Farcaster alert delivered
+```
+
+Rebalancing is **human-confirmed**. The agent prepares, attests, and explains — you approve. Capital never moves without your explicit confirmation.
+
+---
 
 ## Table Of Contents
 
@@ -24,6 +41,8 @@ The project also includes native Bitcoin onboarding through Atomiq, Starkzap wal
 - [Security Posture](#security-posture)
 - [Roadmap](#roadmap)
 
+---
+
 ## Status
 
 Current network target: **Starknet Sepolia**.
@@ -42,14 +61,18 @@ Current execution model:
 - Rebalancing is not currently automatic on a timer.
 - Farcaster alerts require the user to add/enable the Mini App so Farcaster provides notification token details.
 
+---
+
 ## Live Deployment
 
-Current deployed surfaces:
+| Surface | URL |
+| --- | --- |
+| Frontend | `https://bitflow-os.vercel.app` |
+| Backend | `https://xenacious-riva-mist-labs-29e279b2.koyeb.app` |
+| Farcaster manifest | `https://bitflow-os.vercel.app/.well-known/farcaster.json` |
+| Sepolia explorer | `https://sepolia.voyager.online` |
 
-- Frontend: `https://bitflow-os.vercel.app`
-- Backend: `https://xenacious-riva-mist-labs-29e279b2.koyeb.app`
-- Farcaster manifest: `https://bitflow-os.vercel.app/.well-known/farcaster.json`
-- Sepolia explorer: `https://sepolia.voyager.online`
+---
 
 ## Core Features
 
@@ -129,12 +152,12 @@ BitflowOS includes Atomiq integration for native BTC and Lightning BTC onboardin
 
 The bridge path is:
 
-```txt
+```
 BTC or Lightning BTC
-  -> Atomiq quote
-  -> user sends BTC to quoted address
-  -> Atomiq claims/wraps to Starknet output token
-  -> user deposits received wrapper into BitflowOS vault
+  → Atomiq quote
+  → user sends BTC to quoted address
+  → Atomiq claims/wraps to Starknet output token
+  → user deposits received wrapper into BitflowOS vault
 ```
 
 ### Farcaster Mini App Alerts
@@ -149,9 +172,11 @@ BitflowOS ships a Farcaster Mini App manifest and alert flow. Users can:
 
 Alert preferences are user-configurable on the Alerts page.
 
+---
+
 ## Architecture
 
-```txt
+```
                     +----------------------+
                     |      Frontend        |
                     | Next.js / React      |
@@ -190,7 +215,7 @@ Alert preferences are user-configurable on the Alerts page.
 
 Path: [contracts](./contracts)
 
-Language/tooling:
+Language and tooling:
 
 - Cairo
 - Scarb
@@ -207,60 +232,64 @@ Core contracts:
 - `LeveragedVaultAdapter`
 - test mocks for ERC20, ERC4626, Ekubo, and leveraged routes
 
+---
+
 ## User Flow
 
 ### Wrapped BTC Deposit Flow
 
-```txt
+```
 User connects wallet
-  -> app reads Starknet address
-  -> app reads vault state
-  -> user opens Deposit BTC
-  -> user selects supported wrapper
-  -> backend builds approve + deposit calls
-  -> Starkzap submits one multicall
-  -> vault mints yBTC/share position
-  -> agent detects indexed shares
-  -> agent requests Kimi allocation
-  -> 0G verification passes
-  -> user types confirm
-  -> backend executor submits attestation + rebalance
+  → app reads Starknet address
+  → app reads vault state
+  → user opens Deposit BTC
+  → user selects supported wrapper
+  → backend builds approve + deposit calls
+  → Starkzap submits one multicall
+  → vault mints yBTC/share position
+  → agent detects indexed shares
+  → agent requests Kimi allocation
+  → 0G verification passes
+  → user types confirm
+  → backend executor submits attestation + rebalance
 ```
 
 ### Native BTC Flow
 
-```txt
+```
 User connects Bitcoin wallet
-  -> app creates Atomiq quote
-  -> user sends BTC to quote address
-  -> Atomiq claims output token to Starknet address
-  -> user deposits output token into BitflowOS vault
+  → app creates Atomiq quote
+  → user sends BTC to quote address
+  → Atomiq claims output token to Starknet address
+  → user deposits output token into BitflowOS vault
 ```
 
 ### Rebalance Flow
 
-```txt
+```
 Vault has deposit
-  -> Kimi recommendation generated
-  -> deterministic policy checks pass
-  -> 0G provider verification passes
-  -> user confirms
-  -> backend executor submits on-chain transaction
-  -> router rebalances enabled strategy routes
+  → Kimi recommendation generated
+  → deterministic policy checks pass
+  → 0G provider verification passes
+  → user confirms
+  → backend executor submits on-chain transaction
+  → router rebalances enabled strategy routes
 ```
 
 Current rebalance execution is **not automatic**. The backend has the execution machinery, but scheduled monitoring and Farcaster-confirmed rebalance prompts are future work.
 
 ### Withdraw Flow
 
-```txt
-User has yBTC/share position
-  -> user clicks Withdraw
-  -> backend builds vault withdraw call
-  -> Starkzap submits wallet transaction
-  -> frontend dispatches vault refresh
-  -> backend sends Farcaster withdrawal alert if notifications are enabled
 ```
+User has yBTC/share position
+  → user clicks Withdraw
+  → backend builds vault withdraw call
+  → Starkzap submits wallet transaction
+  → frontend dispatches vault refresh
+  → backend sends Farcaster withdrawal alert if notifications are enabled
+```
+
+---
 
 ## Native BTC Bridge Via Atomiq
 
@@ -290,6 +319,8 @@ Security properties:
 - User sends BTC directly to the Atomiq quote address.
 - Atomiq output is sent to the user's Starknet wallet.
 - Vault deposit still requires explicit user-signed Starknet transaction.
+
+---
 
 ## On-Chain Contracts
 
@@ -346,6 +377,8 @@ The deployed Sepolia contracts are documented in [SEPOLIA_DEPLOYMENT_REPORT.md](
 - `EkuboAdapter`: routes assets into configured Ekubo LP positions with explicit slippage controls.
 - `LeveragedVaultAdapter`: test/demo leveraged route with health-factor checks.
 
+---
+
 ## Farcaster Mini App And Alerts
 
 ### Alert Events
@@ -367,9 +400,11 @@ Supported preference events include:
 
 Users can enable or disable alert types on the Alerts page.
 
+---
+
 ## Repository Structure
 
-```txt
+```
 .
 ├── backend
 │   ├── src
@@ -397,6 +432,8 @@ Users can enable or disable alert types on the Alerts page.
 ├── SECURITY_PREDEPLOY_REVIEW.md
 └── MAINNET_LAUNCH_CHECKLIST.md
 ```
+
+---
 
 ## Environment Variables
 
@@ -490,6 +527,8 @@ FARCASTER_ACCOUNT_ASSOCIATION_PAYLOAD=...
 FARCASTER_ACCOUNT_ASSOCIATION_SIGNATURE=...
 ```
 
+---
+
 ## Local Development
 
 ### Prerequisites
@@ -519,11 +558,7 @@ cd backend
 npm run dev
 ```
 
-Default backend URL:
-
-```txt
-http://localhost:8787
-```
+Default backend URL: `http://localhost:8787`
 
 ### Frontend
 
@@ -532,11 +567,7 @@ cd frontend
 npm run dev
 ```
 
-Default frontend URL:
-
-```txt
-http://localhost:3000
-```
+Default frontend URL: `http://localhost:3000`
 
 ### Contracts
 
@@ -545,6 +576,8 @@ cd contracts
 scarb build
 scarb test
 ```
+
+---
 
 ## Testing
 
@@ -555,10 +588,7 @@ cd backend
 npm run check
 ```
 
-Runs:
-
-- TypeScript build
-- Vitest tests
+Runs TypeScript build and Vitest tests.
 
 ### Frontend
 
@@ -567,10 +597,7 @@ cd frontend
 npm run build
 ```
 
-Runs:
-
-- Next.js production build
-- type checks
+Runs Next.js production build and type checks.
 
 ### Contracts
 
@@ -581,6 +608,8 @@ snforge test
 ```
 
 Security review results are documented in [SECURITY_PREDEPLOY_REVIEW.md](./SECURITY_PREDEPLOY_REVIEW.md).
+
+---
 
 ## API Reference
 
@@ -635,6 +664,8 @@ Security review results are documented in [SECURITY_PREDEPLOY_REVIEW.md](./SECUR
 - `POST /api/alerts/preferences`
 - `POST /api/alerts/position-event`
 
+---
+
 ## Security Posture
 
 ### Non-Custodial User Funds
@@ -647,7 +678,7 @@ The backend executor key can submit router deployment/rebalance calls after user
 
 ### Farcaster Tokens
 
-Farcaster notification tokens are sensitive app-user notification credentials. They are stored in Postgres and should not be exposed to the frontend after capture.
+Farcaster notification tokens are sensitive app-user notification credentials. They are stored in Postgres and must not be exposed to the frontend after capture.
 
 ### 0G Key
 
@@ -668,6 +699,8 @@ The system should not be used for uncapped mainnet deposits until:
 - monitoring and incident runbooks are complete
 - native BTC bridge quote and claim paths are proven for production assets
 
+---
+
 ## Roadmap
 
 - Scheduled rebalance monitor.
@@ -682,6 +715,4 @@ The system should not be used for uncapped mainnet deposits until:
 
 ---
 
-Built by **Mist-Labs**
-
-
+Built by **[Mist-Labs](https://github.com/mist-labs)** · [bitflow-os.vercel.app](https://bitflow-os.vercel.app)

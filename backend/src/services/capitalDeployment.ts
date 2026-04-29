@@ -16,6 +16,12 @@ export type CapitalDeploymentResult = {
     targetBps: number;
     label: string;
   }>;
+  skippedWeights?: Array<{
+    strategyId: string;
+    targetBps: number;
+    label: string;
+    reason: string;
+  }>;
   calls: StarknetCall[];
   message: string;
 };
@@ -42,14 +48,18 @@ export class CapitalDeploymentService {
       throw new Error("Attestation registry and strategy router addresses are required for deployment.");
     }
 
-    const weights = this.toExecutableWeights(recommendation);
+    const plan = this.toExecutablePlan(recommendation);
+    const weights = plan.weights;
     if (!weights.length) {
       return {
         status: "skipped",
         attestationHash: recommendation.attestation.attestationHash,
         weights: [],
+        skippedWeights: plan.skippedWeights,
         calls: [],
-        message: "Recommendation is fully idle or has no executable configured route, so no router transaction was submitted."
+        message: plan.skippedWeights.length
+          ? `No router transaction was submitted because every non-idle route is currently gated: ${plan.skippedWeights.map(item => `${item.label} (${item.reason})`).join(", ")}.`
+          : "Recommendation is fully idle or has no executable configured route, so no router transaction was submitted."
       };
     }
 
@@ -111,17 +121,31 @@ export class CapitalDeploymentService {
       transactionHash: execution.transaction_hash,
       attestationHash,
       weights,
+      skippedWeights: plan.skippedWeights,
       calls,
-      message: "Capital deployment submitted to the strategy router."
+      message: plan.skippedWeights.length
+        ? `Capital deployment submitted to the strategy router. Gated routes stayed idle: ${plan.skippedWeights.map(item => item.label).join(", ")}.`
+        : "Capital deployment submitted to the strategy router."
     };
   }
 
-  private toExecutableWeights(recommendation: AllocationRecommendation) {
-    return recommendation.weights.flatMap(weight => {
+  private toExecutablePlan(recommendation: AllocationRecommendation) {
+    const skippedWeights: NonNullable<CapitalDeploymentResult["skippedWeights"]> = [];
+    const weights = recommendation.weights.flatMap(weight => {
       if (isIdleAllocation(weight.strategyId, weight.label) || weight.targetBps <= 0) return [];
       const route = this.findRoute(weight.strategyId, weight.label);
       if (!route.executionEnabled) {
         throw new Error(`${route.label} is not enabled for on-chain execution.`);
+      }
+      const gateReason = getExecutionGateReason(route);
+      if (gateReason) {
+        skippedWeights.push({
+          strategyId: route.id,
+          targetBps: weight.targetBps,
+          label: route.label,
+          reason: gateReason
+        });
+        return [];
       }
       if (weight.targetBps > route.maxBps) {
         throw new Error(`${route.label} target ${weight.targetBps} bps exceeds route cap ${route.maxBps} bps.`);
@@ -137,6 +161,11 @@ export class CapitalDeploymentService {
         label: route.label
       }];
     });
+    return { weights, skippedWeights };
+  }
+
+  private toExecutableWeights(recommendation: AllocationRecommendation) {
+    return this.toExecutablePlan(recommendation).weights;
   }
 
   private findRoute(strategyId: string, label: string): StrategyRouteConfig {
@@ -154,6 +183,16 @@ export class CapitalDeploymentService {
     }
     return route;
   }
+}
+
+export function getExecutionGateReason(route: StrategyRouteConfig): string | undefined {
+  if (route.quoteRequired) {
+    return "route requires a live quote and slippage preflight";
+  }
+  if (route.uiEnabled === false) {
+    return route.disabledReason ?? "route is currently gated";
+  }
+  return undefined;
 }
 
 function hashJson(value: unknown) {
