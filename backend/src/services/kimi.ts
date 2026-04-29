@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { AppConfig } from "../config.js";
 import type { AllocationRecommendation } from "../types.js";
 import { ZeroGVerifierService } from "./zeroGVerifier.js";
+import { isIdleAllocation } from "./capitalDeployment.js";
 
 type RecommendationInput = {
   walletAddress?: string;
@@ -87,6 +88,7 @@ export class KimiRecommendationService {
               "You are BitflowOS policy-bound allocation agent.",
               "Return strict JSON with confidenceBps, weights, riskChecks, and reasoning.",
               "Each weight must use camelCase fields: strategyId, label, targetBps, rationale. targetBps is an integer basis-point value.",
+              "Use only configured strategy ids from the user payload. For idle/reserve/cash/liquid buffer, always use strategyId `IDLE` and label `Idle Reserve`.",
               "Never recommend fake APYs. Prefer idle reserve when live data is incomplete.",
               `Policy: min confidence ${this.config.policy.minConfidenceBps}, min idle ${this.config.policy.minIdleReserveBps}, max LP ${this.config.policy.maxLpBps}, max strategy ${this.config.policy.maxStrategyBps}.`
             ].join(" ")
@@ -118,40 +120,47 @@ export class KimiRecommendationService {
   private normalizeRecommendation(raw: unknown, fallback: AllocationRecommendation): AllocationRecommendation {
     const candidate = raw as Partial<AllocationRecommendation>;
     const candidateWeights = Array.isArray(candidate.weights) && candidate.weights.length > 0
-      ? candidate.weights.map((item: any) => ({
-        strategyId: String(item.strategyId ?? item.id ?? "IDLE"),
-        label: this.resolveStrategyLabel(String(item.strategyId ?? item.id ?? "IDLE")),
-        targetBps: clampBps(Number(
-          item.targetBps
-            ?? item.target_bps
-            ?? item.targetWeightBps
-            ?? item.target_weight_bps
-            ?? item.weightBps
-            ?? item.weight_bps
-            ?? item.bps
-            ?? (Number.isFinite(Number(item.percent)) ? Number(item.percent) * 100 : 0)
-        )),
-        rationale: String(item.rationale ?? "Policy checked.")
-      }))
+      ? candidate.weights.map((item: any) => {
+        const rawStrategyId = String(item.strategyId ?? item.id ?? item.label ?? "IDLE");
+        const rawLabel = String(item.label ?? rawStrategyId);
+        const idle = isIdleAllocation(rawStrategyId, rawLabel);
+        const strategyId = idle ? "IDLE" : rawStrategyId;
+        return {
+          strategyId,
+          label: idle ? "Idle Reserve" : this.resolveStrategyLabel(strategyId, rawLabel),
+          targetBps: clampBps(Number(
+            item.targetBps
+              ?? item.target_bps
+              ?? item.targetWeightBps
+              ?? item.target_weight_bps
+              ?? item.weightBps
+              ?? item.weight_bps
+              ?? item.bps
+              ?? (Number.isFinite(Number(item.percent)) ? Number(item.percent) * 100 : 0)
+          )),
+          rationale: String(item.rationale ?? "Policy checked.")
+        };
+      })
       : fallback.weights;
     const weights = this.withIdleReserve(candidateWeights);
     const idleBps = weights
-      .filter(item => /idle/i.test(item.strategyId) || /idle/i.test(item.label))
+      .filter(item => isIdleAllocation(item.strategyId, item.label))
       .reduce((sum, item) => sum + item.targetBps, 0);
     const maxStrategyBps = Math.max(...weights
-      .filter(item => !/idle/i.test(item.strategyId) && !/idle/i.test(item.label))
+      .filter(item => !isIdleAllocation(item.strategyId, item.label))
       .map(item => item.targetBps), 0);
+    const confidenceBps = clampBps(Number(candidate.confidenceBps ?? fallback.confidenceBps));
 
     return {
       ...fallback,
-      status: Number(candidate.confidenceBps) >= this.config.policy.minConfidenceBps ? "ready" : "blocked",
-      confidenceBps: clampBps(Number(candidate.confidenceBps ?? fallback.confidenceBps)),
+      status: confidenceBps >= this.config.policy.minConfidenceBps ? "ready" : "blocked",
+      confidenceBps,
       weights,
       riskChecks: [
         {
           id: "confidence",
           label: "Confidence threshold",
-          passed: Number(candidate.confidenceBps ?? 0) >= this.config.policy.minConfidenceBps,
+          passed: confidenceBps >= this.config.policy.minConfidenceBps,
           detail: `Minimum ${this.config.policy.minConfidenceBps} bps.`
         },
         {
@@ -171,16 +180,21 @@ export class KimiRecommendationService {
     };
   }
 
-  private resolveStrategyLabel(strategyId: string): string {
-    if (/idle/i.test(strategyId)) return "Idle Reserve";
-    const route = Object.values(this.config.strategyRoutes).find(item => item.id === strategyId || item.label === strategyId);
-    return route?.label ?? strategyId;
+  private resolveStrategyLabel(strategyId: string, fallbackLabel = strategyId): string {
+    if (isIdleAllocation(strategyId, fallbackLabel)) return "Idle Reserve";
+    const normalizedId = normalizeFeltish(strategyId);
+    const route = Object.values(this.config.strategyRoutes).find(item => (
+      normalizeFeltish(item.id) === normalizedId
+      || item.label.toLowerCase() === strategyId.toLowerCase()
+      || item.label.toLowerCase() === fallbackLabel.toLowerCase()
+    ));
+    return route?.label ?? fallbackLabel;
   }
 
   private withIdleReserve(weights: AllocationRecommendation["weights"]): AllocationRecommendation["weights"] {
     const totalBps = weights.reduce((sum, item) => sum + item.targetBps, 0);
     const missingBps = Math.max(0, 10000 - totalBps);
-    const idleIndex = weights.findIndex(item => /idle/i.test(item.strategyId) || /idle/i.test(item.label));
+    const idleIndex = weights.findIndex(item => isIdleAllocation(item.strategyId, item.label));
 
     if (idleIndex >= 0) {
       return weights.map((item, index) => index === idleIndex
@@ -264,4 +278,16 @@ function hashRecommendation(recommendation: AllocationRecommendation): string {
     riskChecks: recommendation.riskChecks,
     createdAt: recommendation.createdAt
   })).digest("hex")}`;
+}
+
+function normalizeFeltish(value: string) {
+  const trimmed = value.trim();
+  try {
+    return `0x${BigInt(trimmed).toString(16)}`;
+  } catch {
+    if (/^[a-zA-Z0-9_ -]{2,32}$/.test(trimmed)) {
+      return `0x${Buffer.from(trimmed, "utf8").toString("hex")}`;
+    }
+    return trimmed.toLowerCase();
+  }
 }

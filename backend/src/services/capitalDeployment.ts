@@ -118,7 +118,7 @@ export class CapitalDeploymentService {
 
   private toExecutableWeights(recommendation: AllocationRecommendation) {
     return recommendation.weights.flatMap(weight => {
-      if (/idle/i.test(weight.strategyId) || /idle/i.test(weight.label) || weight.targetBps <= 0) return [];
+      if (isIdleAllocation(weight.strategyId, weight.label) || weight.targetBps <= 0) return [];
       const route = this.findRoute(weight.strategyId, weight.label);
       if (!route.executionEnabled) {
         throw new Error(`${route.label} is not enabled for on-chain execution.`);
@@ -167,9 +167,31 @@ function toFelt(value: string) {
 }
 
 function normalizeFeltish(value: string) {
+  const trimmed = value.trim();
   try {
-    return `0x${BigInt(value).toString(16)}`;
+    return `0x${BigInt(trimmed).toString(16)}`;
   } catch {
-    return value.toLowerCase();
+    if (/^[a-zA-Z0-9_ -]{2,32}$/.test(trimmed)) {
+      return `0x${Buffer.from(trimmed, "utf8").toString("hex")}`;
+    }
+    return trimmed.toLowerCase();
   }
+}
+
+export function isIdleAllocation(strategyId: string, label = "") {
+  const normalized = `${normalizeText(strategyId)} ${normalizeText(label)}`;
+  return /\bidle\b/.test(normalized)
+    || /\breserve\b/.test(normalized)
+    || /\bcash\b/.test(normalized)
+    || /\bunallocated\b/.test(normalized)
+    || /\bwithdrawal buffer\b/.test(normalized)
+    || /\bliquid buffer\b/.test(normalized);
+}
+
+function normalizeText(value: string) {
+  return value
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .trim();
 }
