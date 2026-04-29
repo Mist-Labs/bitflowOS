@@ -367,7 +367,12 @@ function summarizeVault(state: VaultState | null) {
     ?? state.assets.find(asset => toBigInt(asset.userShares) > 0n || toBigInt(asset.userAssetShares) > 0n)
     ?? state.assets[0];
   const totalAssetsRaw = state.assets.reduce((sum, asset) => sum + toBigInt(asset.totalAssets), 0n);
-  const userSharesRaw = state.assets.reduce((sum, asset) => sum + toBigInt(asset.userShares) + toBigInt(asset.userAssetShares), 0n);
+  const userAssetSharesRaw = state.assets.reduce((sum, asset) => sum + toBigInt(asset.userAssetShares), 0n);
+  const globalUserSharesRaw = state.assets.reduce((max, asset) => {
+    const shares = toBigInt(asset.userShares);
+    return shares > max ? shares : max;
+  }, 0n);
+  const userSharesRaw = userAssetSharesRaw > 0n ? userAssetSharesRaw : globalUserSharesRaw;
 
   return {
     totalAssetsRaw,
@@ -404,6 +409,8 @@ function recommendationApy(recommendation: AllocationRecommendation) {
 function compactUnits(value: bigint, decimals: number) {
   if (decimals <= 0) return value.toString();
   const divisor = 10n ** BigInt(decimals);
+  const oneSatoshi = decimals > 8 ? 10n ** BigInt(decimals - 8) : 1n;
+  if (value > 0n && value < oneSatoshi) return "<0.00000001";
   const whole = value / divisor;
   const fraction = value % divisor;
   if (whole > 0n) {

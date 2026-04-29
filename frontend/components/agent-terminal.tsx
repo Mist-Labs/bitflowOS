@@ -13,6 +13,7 @@ type WalletState = {
 } | null;
 
 type Step = "login" | "deposit" | "watching" | "allocating" | "confirm" | "deploying" | "farcaster" | "done";
+type AlertUpdateMode = "email" | "farcaster" | null;
 
 type DepositSubmittedEvent = {
   walletAddress?: string;
@@ -33,9 +34,8 @@ const EMAIL_ALERT_GUIDE = "If Farcaster setup is not available, enter your email
 
 type AgentSession = {
   walletAddress: string;
-  step: "confirm" | "done";
+  step: "confirm";
   recommendation?: AllocationRecommendation;
-  messages: string[];
   updatedAt: string;
 };
 
@@ -47,6 +47,7 @@ export function AgentTerminal() {
   const [recommendation, setRecommendation] = useState<AllocationRecommendation | null>(null);
   const [depositPrompted, setDepositPrompted] = useState(false);
   const [discoveredAddress, setDiscoveredAddress] = useState("");
+  const [alertUpdateMode, setAlertUpdateMode] = useState<AlertUpdateMode>(null);
   const [messages, setMessages] = useState<string[]>([
     "Hello. I am the BitflowOS allocation agent.",
     "I will check login, deposit state, strategy readiness, 0G verification, and alerts before capital moves."
@@ -181,6 +182,21 @@ export function AgentTerminal() {
     setMessages(current => [...current, `> ${value}`]);
     setInput("");
 
+    if (alertUpdateMode) {
+      if (alertUpdateMode === "email") {
+        if (!isEmailAddress(value)) {
+          pushOnce("Enter a valid email address, for example name@example.com.");
+          return;
+        }
+        await enableEmailAlerts(value);
+        setAlertUpdateMode(null);
+        return;
+      }
+      await updateFarcasterUsername(value);
+      setAlertUpdateMode(null);
+      return;
+    }
+
     const actionIntent = parsePositionAction(value);
     if (actionIntent) {
       if (!walletAddress || isBitcoinWallet) {
@@ -193,6 +209,19 @@ export function AgentTerminal() {
       window.dispatchEvent(new CustomEvent("bitflowos:position-action-request", {
         detail: { action: actionIntent }
       }));
+      return;
+    }
+
+    const alertUpdateIntent = parseAlertUpdateIntent(value);
+    if (alertUpdateIntent) {
+      if (!walletAddress || isBitcoinWallet) {
+        pushOnce("Connect the Starknet wallet first so I can update alerts for the correct account.");
+        return;
+      }
+      setAlertUpdateMode(alertUpdateIntent);
+      pushOnce(alertUpdateIntent === "email"
+        ? "Enter the new email address for this wallet."
+        : "Enter the new Farcaster username for this wallet.");
       return;
     }
 
@@ -248,26 +277,7 @@ export function AgentTerminal() {
         pushOnce("I need a Starknet wallet address to attach alerts.");
         return;
       }
-      setBusy(true);
-      try {
-        const result = await setFarcasterUsername({ walletAddress, farcasterUsername: value });
-        if (result.farcasterNotificationsEnabled) {
-          setMessages(current => [...current, result.welcome, "Farcaster inbox alerts are live for this wallet. You are set."]);
-          setStep("done");
-        } else {
-          setMessages(current => [
-            ...current,
-            result.welcome,
-            ...FARCASTER_ENABLE_GUIDE,
-            EMAIL_ALERT_GUIDE
-          ]);
-          setStep("farcaster");
-        }
-      } catch (error) {
-        pushOnce((error as Error).message);
-      } finally {
-        setBusy(false);
-      }
+      await updateFarcasterUsername(value);
     }
   }
 
@@ -351,6 +361,35 @@ export function AgentTerminal() {
       const result = await setEmailAlerts({ walletAddress, emailAddress, enabled: true });
       setMessages(current => [...current, result.welcome, "Email alerts are attached to this wallet. You are set."]);
       setStep("done");
+      clearAgentSession();
+    } catch (error) {
+      pushOnce((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updateFarcasterUsername(username: string) {
+    if (!walletAddress) {
+      pushOnce("I need a Starknet wallet address to attach alerts.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await setFarcasterUsername({ walletAddress, farcasterUsername: username });
+      if (result.farcasterNotificationsEnabled) {
+        setMessages(current => [...current, result.welcome, "Farcaster inbox alerts are live for this wallet. You are set."]);
+        setStep("done");
+        clearAgentSession();
+      } else {
+        setMessages(current => [
+          ...current,
+          result.welcome,
+          ...FARCASTER_ENABLE_GUIDE,
+          EMAIL_ALERT_GUIDE
+        ]);
+        setStep("farcaster");
+      }
     } catch (error) {
       pushOnce((error as Error).message);
     } finally {
@@ -419,7 +458,7 @@ export function AgentTerminal() {
           "Capital plan prepared from Kimi weights and 0G verification.",
           "Type `confirm` to submit the attestation and execute the router rebalance on-chain."
         ];
-        saveAgentSession("confirm", rec, merged);
+          saveAgentSession("confirm", rec);
         return merged;
       });
       window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
@@ -446,7 +485,7 @@ export function AgentTerminal() {
       if (result.status === "skipped") {
         setMessages(current => {
           const merged = [...current, result.message];
-          saveAgentSession("done", recommendation, merged);
+          clearAgentSession();
           return merged;
         });
       } else {
@@ -459,7 +498,7 @@ export function AgentTerminal() {
               ? [`Gated routes stayed idle: ${result.skippedWeights.map(item => `${item.label} ${Math.round(item.targetBps / 100)}% (${item.reason})`).join(", ")}.`]
               : [])
           ];
-          saveAgentSession("done", recommendation, merged);
+          clearAgentSession();
           return merged;
         });
       }
@@ -517,6 +556,7 @@ export function AgentTerminal() {
       });
       setMessages(current => [...current, `Farcaster inbox alerts are live for @${context.user.username ?? context.user.fid}. You are set.`]);
       setStep("done");
+      clearAgentSession();
     } catch (error) {
       pushOnce(`Farcaster notifications are not enabled yet: ${(error as Error).message}`);
     } finally {
@@ -530,11 +570,16 @@ export function AgentTerminal() {
       if (!raw) return false;
       const session = JSON.parse(raw) as AgentSession;
       const isSameWallet = session.walletAddress.toLowerCase() === address.toLowerCase();
-      const isFresh = Date.now() - new Date(session.updatedAt).getTime() < 24 * 60 * 60 * 1000;
+      const isFresh = Date.now() - new Date(session.updatedAt).getTime() < 60 * 60 * 1000;
       if (!isSameWallet || !isFresh) return false;
       setRecommendation(session.recommendation ?? null);
       setStep(session.step);
-      setMessages(session.messages);
+      setMessages(current => [
+        ...current,
+        `Connected through ${wallet?.label ?? "wallet"} (${short(address)}).`,
+        "A prepared capital plan is waiting for your confirmation.",
+        "Type `confirm` to submit the attestation and execute the router rebalance on-chain."
+      ]);
       if (session.recommendation) {
         window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
           detail: {
@@ -550,16 +595,19 @@ export function AgentTerminal() {
     }
   }
 
-  function saveAgentSession(nextStep: "confirm" | "done", rec: AllocationRecommendation | null, nextMessages: string[]) {
+  function saveAgentSession(nextStep: "confirm", rec: AllocationRecommendation | null) {
     if (!walletAddress) return;
     const session: AgentSession = {
       walletAddress,
       step: nextStep,
       recommendation: rec ?? undefined,
-      messages: nextMessages,
       updatedAt: new Date().toISOString()
     };
     window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  }
+
+  function clearAgentSession() {
+    window.localStorage.removeItem(SESSION_KEY);
   }
 
   const prompt = useMemo(() => {
@@ -568,6 +616,8 @@ export function AgentTerminal() {
     if (step === "watching") return "watching vault";
     if (step === "allocating") return "allocating";
     if (step === "confirm") return "type confirm";
+    if (alertUpdateMode === "email") return "new email";
+    if (alertUpdateMode === "farcaster") return "new username";
     if (step === "farcaster") return "username or email";
     if (step === "done") return "ask for action";
     return "deploying";
@@ -647,6 +697,15 @@ function parsePositionAction(value: string): "claim" | "withdraw" | null {
   const normalized = value.toLowerCase();
   if (/\b(claim|harvest|rewards?)\b/.test(normalized)) return "claim";
   if (/\b(withdraw|exit|redeem|unstake)\b/.test(normalized)) return "withdraw";
+  return null;
+}
+
+function parseAlertUpdateIntent(value: string): AlertUpdateMode {
+  const normalized = value.toLowerCase();
+  if (/\b(change|update|edit|replace|set)\b.*\b(email|mail)\b/.test(normalized)) return "email";
+  if (/\b(change|update|edit|replace|set)\b.*\b(farcaster|username|handle)\b/.test(normalized)) return "farcaster";
+  if (/\b(email|mail)\b.*\b(change|update|edit|replace|set)\b/.test(normalized)) return "email";
+  if (/\b(farcaster|username|handle)\b.*\b(change|update|edit|replace|set)\b/.test(normalized)) return "farcaster";
   return null;
 }
 
