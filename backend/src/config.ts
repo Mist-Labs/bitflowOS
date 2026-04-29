@@ -52,6 +52,7 @@ const EnvSchema = z.object({
   NEYNAR_API_KEY: z.string().optional().default(""),
   FARCASTER_APP_URL: z.string().url().default("http://localhost:3000"),
   DATA_DIR: z.string().default("./data"),
+  DATABASE_URL: z.string().url().or(z.literal("")).default(""),
   KIMI_API_KEY: z.string().optional().default(""),
   KIMI_MODEL: z.string().optional().default("kimi-k2-0905-preview"),
   KIMI_BASE_URL: z.string().url().optional(),
@@ -97,6 +98,7 @@ export interface AppConfig {
   neynarApiKey: string;
   farcasterAppUrl: string;
   dataDir: string;
+  databaseUrl: string;
   kimiApiKey: string;
   kimiModel: string;
   kimiApiBaseUrl: string;
@@ -150,6 +152,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     neynarApiKey: parsed.NEYNAR_API_KEY,
     farcasterAppUrl: parsed.FARCASTER_APP_URL,
     dataDir: parsed.BACKEND_DATA_DIR ?? parsed.DATA_DIR,
+    databaseUrl: parsed.DATABASE_URL,
     kimiApiKey: parsed.KIMI_API_KEY,
     kimiModel: parsed.KIMI_MODEL,
     kimiApiBaseUrl: (parsed.KIMI_BASE_URL ?? parsed.KIMI_API_BASE_URL).replace(/\/$/, ""),

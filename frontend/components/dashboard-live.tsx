@@ -1,6 +1,6 @@
 "use client";
 
-import { buildWithdrawCall, getVaultState } from "@/lib/api";
+import { buildWithdrawCall, getVaultState, sendPositionAlert } from "@/lib/api";
 import { strategies } from "@/lib/data";
 import { executeStarknetMulticallViaStarkZap } from "@/lib/starkzap-executor";
 import type { AllocationRecommendation, AppConfig, VaultState } from "@/lib/types";
@@ -318,6 +318,13 @@ function PositionActions({ wallet, externalVaultState }: { wallet: WalletState; 
       const call = await buildWithdrawCall({ tokenSymbol: position.symbol, sharesBaseUnits: shares });
       const execution = await executeStarknetMulticallViaStarkZap([call.call]);
       setStatus(`Withdrawal submitted: ${short(execution.hash)}.`);
+      void sendPositionAlert({
+        walletAddress,
+        type: "withdrawal_requested",
+        title: "Withdrawal submitted",
+        body: `BitflowOS withdrawal was submitted for ${position.symbol}.`,
+        transactionHash: execution.hash
+      });
       window.dispatchEvent(new CustomEvent("bitflowos:vault-refresh"));
     } catch (error) {
       setStatus(`Withdraw failed: ${(error as Error).message}`);

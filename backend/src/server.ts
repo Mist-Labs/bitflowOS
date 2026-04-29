@@ -2,9 +2,11 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { loadConfig } from "./config.js";
 import { registerRoutes } from "./routes.js";
+import { runMigrations } from "./storage/postgres.js";
 
 export async function buildServer() {
   const config = loadConfig();
+  await runMigrations(config.databaseUrl);
   const app = Fastify({
     logger: {
       level: config.nodeEnv === "test" ? "silent" : "info",

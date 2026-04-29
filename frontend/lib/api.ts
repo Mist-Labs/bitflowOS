@@ -226,6 +226,7 @@ export async function getUserProfile(walletAddress: string): Promise<{
 export async function setFarcasterUsername(input: {
   walletAddress: string;
   farcasterUsername: string;
+  farcasterFid?: number;
 }): Promise<{ welcome: string; alerts: string[] }> {
   const response = await fetch(`${API_URL}/api/users/farcaster-username`, {
     method: "POST",
@@ -236,4 +237,20 @@ export async function setFarcasterUsername(input: {
     throw new Error("Unable to set Farcaster username");
   }
   return response.json() as Promise<{ welcome: string; alerts: string[] }>;
+}
+
+export async function sendPositionAlert(input: {
+  walletAddress: string;
+  type: "withdrawal_requested" | "withdrawal_completed" | "transaction_failed";
+  title: string;
+  body: string;
+  transactionHash?: string;
+}): Promise<{ delivered: boolean; reason?: string }> {
+  const response = await fetch(`${API_URL}/api/alerts/position-event`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) return { delivered: false, reason: "alert endpoint failed" };
+  return response.json() as Promise<{ delivered: boolean; reason?: string }>;
 }

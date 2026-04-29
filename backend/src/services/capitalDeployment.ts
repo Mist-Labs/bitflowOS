@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { Account, RpcProvider } from "starknet";
 import type { AppConfig } from "../config.js";
 import type { AllocationRecommendation, StarknetCall, StrategyRouteConfig } from "../types.js";
+import { AlertService } from "./alerts.js";
 
 const STARKNET_FIELD_PRIME = BigInt("0x800000000000011000000000000000000000000000000000000000000000001");
 
@@ -20,7 +21,11 @@ export type CapitalDeploymentResult = {
 };
 
 export class CapitalDeploymentService {
-  constructor(private readonly config: AppConfig) {}
+  private readonly alerts: AlertService;
+
+  constructor(private readonly config: AppConfig) {
+    this.alerts = new AlertService(config);
+  }
 
   async deploy(input: { recommendation: AllocationRecommendation }): Promise<CapitalDeploymentResult> {
     const recommendation = input.recommendation;
@@ -90,6 +95,16 @@ export class CapitalDeploymentService {
       entrypoint: call.entrypoint,
       calldata: call.calldata
     })));
+    if (recommendation.walletAddress) {
+      await this.alerts.send({
+        walletAddress: recommendation.walletAddress,
+        type: "staking_started",
+        title: "Capital deployment submitted",
+        body: `BitflowOS routed capital to ${weights.map(item => `${item.label} ${Math.round(item.targetBps / 100)}%`).join(", ")}.`,
+        targetUrl: this.config.farcasterAppUrl,
+        transactionHash: execution.transaction_hash
+      });
+    }
 
     return {
       status: "submitted",
