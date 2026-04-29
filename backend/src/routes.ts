@@ -402,6 +402,32 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
     });
   });
 
+  app.get("/api/alerts/preferences", async request => {
+    const query = z.object({
+      walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/)
+    }).parse(request.query);
+    const profile = await profiles.get(query.walletAddress);
+    const existing = await alerts.getPreferencesForWallet(query.walletAddress);
+    return existing ?? {
+      fid: profile?.farcasterFid,
+      walletAddress: query.walletAddress,
+      enabled: true,
+      eventTypes: [
+        "bridge_started",
+        "bridge_completed",
+        "deposit_confirmed",
+        "staking_started",
+        "harvest_available",
+        "withdrawal_requested",
+        "withdrawal_completed",
+        "position_health_warning",
+        "transaction_failed"
+      ],
+      minSeverity: "info",
+      updatedAt: new Date().toISOString()
+    };
+  });
+
   app.post("/api/alerts/position-event", async request => {
     const input = z.object({
       walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),

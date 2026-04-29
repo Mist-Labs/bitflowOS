@@ -100,6 +100,24 @@ export class AlertService {
     return this.preferences.upsert(record, candidate => candidate.fid === input.fid);
   }
 
+  async getPreferencesForWallet(walletAddress: string): Promise<AlertPreference | undefined> {
+    const subscription = await this.getSubscriptionByWallet(walletAddress);
+    if (subscription) return this.getPreference(subscription.fid);
+    if (this.databaseUrl) {
+      const normalized = normalizeWallet(walletAddress);
+      const result = await getPool(this.databaseUrl).query(
+        `SELECT a.fid, a.wallet_address, a.enabled, a.event_types, a.min_severity, a.updated_at
+         FROM alert_preferences a
+         JOIN user_profiles p ON p.farcaster_fid = a.fid
+         WHERE LOWER(p.wallet_address) = $1
+         LIMIT 1`,
+        [normalized]
+      );
+      return result.rows[0] ? rowToPreference(result.rows[0]) : undefined;
+    }
+    return this.preferences.find(candidate => normalizeWallet(candidate.walletAddress) === normalizeWallet(walletAddress));
+  }
+
   async send(input: AlertInput): Promise<{ delivered: boolean; reason?: string }> {
     const subscription = input.fid
       ? await this.getSubscription(input.fid)

@@ -23,6 +23,15 @@ type DepositSubmittedEvent = {
 };
 
 const WALLET_KEY = "bitflowos.connectedWallet";
+const SESSION_KEY = "bitflowos.agentSession";
+
+type AgentSession = {
+  walletAddress: string;
+  step: "confirm" | "done";
+  recommendation?: AllocationRecommendation;
+  messages: string[];
+  updatedAt: string;
+};
 
 export function AgentTerminal() {
   const [wallet, setWallet] = useState<WalletState>(null);
@@ -109,6 +118,7 @@ export function AgentTerminal() {
       window.dispatchEvent(new CustomEvent("bitflowos:wallet", { detail: hydrated }));
     }
     pushOnce(`Connected through ${wallet.label}${address ? ` (${short(address)})` : ""}.`);
+    if (address && restoreAgentSession(address)) return;
     void runLoggedInChecks();
   }, [wallet?.chain, wallet?.address]);
 
@@ -364,11 +374,15 @@ export function AgentTerminal() {
 
       await sleep(700);
       setStep("confirm");
-      setMessages(current => [
-        ...current,
-        "Capital plan prepared from Kimi weights and 0G verification.",
-        "Type `confirm` to submit the attestation and execute the router rebalance on-chain."
-      ]);
+      setMessages(current => {
+        const merged = [
+          ...current,
+          "Capital plan prepared from Kimi weights and 0G verification.",
+          "Type `confirm` to submit the attestation and execute the router rebalance on-chain."
+        ];
+        saveAgentSession("confirm", rec, merged);
+        return merged;
+      });
       window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
         detail: { stage: "recommendation_ready", recommendation: rec, timestamp: new Date().toISOString() }
       }));
@@ -391,13 +405,21 @@ export function AgentTerminal() {
     try {
       const result = await deployCapital({ recommendation });
       if (result.status === "skipped") {
-        setMessages(current => [...current, result.message]);
+        setMessages(current => {
+          const merged = [...current, result.message];
+          saveAgentSession("done", recommendation, merged);
+          return merged;
+        });
       } else {
-        setMessages(current => [
-          ...current,
-          `Router rebalance submitted: ${result.transactionHash ?? "transaction hash pending"}.`,
-          `Attestation ${short(result.attestationHash ?? "")} accepted for ${result.weights.map(item => `${item.label} ${Math.round(item.targetBps / 100)}%`).join(", ")}.`
-        ]);
+        setMessages(current => {
+          const merged = [
+            ...current,
+            `Router rebalance submitted: ${result.transactionHash ?? "transaction hash pending"}.`,
+            `Attestation ${short(result.attestationHash ?? "")} accepted for ${result.weights.map(item => `${item.label} ${Math.round(item.targetBps / 100)}%`).join(", ")}.`
+          ];
+          saveAgentSession("done", recommendation, merged);
+          return merged;
+        });
       }
       window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
         detail: { stage: "plan_staged", recommendation, timestamp: new Date().toISOString(), txHash: result.transactionHash }
@@ -458,6 +480,44 @@ export function AgentTerminal() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function restoreAgentSession(address: string) {
+    try {
+      const raw = window.localStorage.getItem(SESSION_KEY);
+      if (!raw) return false;
+      const session = JSON.parse(raw) as AgentSession;
+      const isSameWallet = session.walletAddress.toLowerCase() === address.toLowerCase();
+      const isFresh = Date.now() - new Date(session.updatedAt).getTime() < 24 * 60 * 60 * 1000;
+      if (!isSameWallet || !isFresh) return false;
+      setRecommendation(session.recommendation ?? null);
+      setStep(session.step);
+      setMessages(session.messages);
+      if (session.recommendation) {
+        window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
+          detail: {
+            stage: session.step === "confirm" ? "recommendation_ready" : "plan_staged",
+            recommendation: session.recommendation,
+            timestamp: session.updatedAt
+          }
+        }));
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function saveAgentSession(nextStep: "confirm" | "done", rec: AllocationRecommendation | null, nextMessages: string[]) {
+    if (!walletAddress) return;
+    const session: AgentSession = {
+      walletAddress,
+      step: nextStep,
+      recommendation: rec ?? undefined,
+      messages: nextMessages,
+      updatedAt: new Date().toISOString()
+    };
+    window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
   }
 
   const prompt = useMemo(() => {

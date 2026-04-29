@@ -1,11 +1,12 @@
 import { Panel, SectionHeader } from "@/components/section";
 
 const checks = [
-  ["Attestation hash", "pending deployed registry"],
+  ["0G attestation", "verified per recommendation"],
+  ["Attestation hash", "returned before deployment"],
   ["Max LP exposure", "pass"],
   ["Idle reserve", "pass"],
   ["Strategy caps", "pass"],
-  ["Stale data guard", "needs live indexer"],
+  ["Vault state", "live Starknet RPC"],
   ["Confidence threshold", "pass"]
 ];
 
@@ -21,13 +22,13 @@ export default function AiPolicyPage() {
               <small>MODEL CONFIDENCE</small>
             </div>
             <p>
-              Maintain conservative Vesu/Endur exposure, route only bounded capital into Ekubo, and keep idle reserve until live
-              withdrawal behavior is confirmed.
+              Build each allocation from live vault state, Kimi policy weights, configured route caps, and 0G verification before the
+              router executor submits an on-chain rebalance.
             </p>
             <div className="risk-tags">
-              <span>LOW UTILIZATION RISK</span>
+              <span>0G VERIFIED</span>
               <span>LP CAP ENFORCED</span>
-              <span>LIVE TEST REQUIRED</span>
+              <span>HUMAN CONFIRMATION</span>
             </div>
           </div>
         </Panel>

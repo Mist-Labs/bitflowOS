@@ -276,3 +276,36 @@ export async function saveFarcasterClientSubscription(input: {
   }
   return response.json() as Promise<{ ok: boolean; farcasterNotificationsEnabled?: boolean }>;
 }
+
+export async function getAlertPreferences(walletAddress: string): Promise<{
+  fid?: number;
+  walletAddress?: string;
+  enabled: boolean;
+  eventTypes: string[];
+  minSeverity: "info" | "warning" | "critical";
+}> {
+  return getJson(`/api/alerts/preferences?walletAddress=${encodeURIComponent(walletAddress)}`, {
+    walletAddress,
+    enabled: true,
+    eventTypes: [],
+    minSeverity: "info"
+  });
+}
+
+export async function setAlertPreferences(input: {
+  fid: number;
+  walletAddress?: string;
+  enabled: boolean;
+  eventTypes: string[];
+  minSeverity?: "info" | "warning" | "critical";
+}) {
+  const response = await fetch(`${API_URL}/api/alerts/preferences`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...input, minSeverity: input.minSeverity ?? "info" })
+  });
+  if (!response.ok) {
+    throw new Error("Unable to save alert preferences.");
+  }
+  return response.json();
+}
