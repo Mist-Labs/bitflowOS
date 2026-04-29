@@ -500,6 +500,17 @@ FARCASTER_APP_URL=https://bitflow-os.vercel.app
 NEYNAR_API_KEY=...
 ```
 
+### Backend Email Alerts
+
+```env
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USERNAME=...
+SMTP_PASSWORD=...
+FROM_EMAIL=alerts@example.com
+```
+
 ### Frontend Public Variables
 
 ```env

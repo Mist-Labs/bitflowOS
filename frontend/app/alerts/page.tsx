@@ -16,12 +16,14 @@ const WALLET_KEY = "bitflowos.connectedWallet";
 export default function AlertsPage() {
   const [wallet, setWallet] = useState<WalletState>(null);
   const [fid, setFid] = useState<number | undefined>();
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [emailAddress, setEmailAddress] = useState<string | undefined>();
   const [enabled, setEnabled] = useState(true);
   const [selected, setSelected] = useState<string[]>([]);
   const [status, setStatus] = useState("Connect a Starknet wallet to manage alert preferences.");
 
   const walletAddress = wallet?.address ?? "";
-  const canSave = Boolean(walletAddress && fid);
+  const canSave = Boolean(walletAddress && (fid || emailEnabled));
 
   useEffect(() => {
     function readWallet() {
@@ -62,12 +64,17 @@ export default function AlertsPage() {
       ]);
       if (cancelled) return;
       setFid(profile.farcasterFid ?? preferences.fid);
+      setEmailEnabled(Boolean(profile.emailAlertsEnabled));
+      setEmailAddress(profile.emailAddress);
       setEnabled(preferences.enabled);
       setSelected(preferences.eventTypes.length ? preferences.eventTypes : alertEvents);
-      setStatus(profile.farcasterNotificationsEnabled
-        ? `Inbox alerts are live for @${profile.farcasterUsername ?? profile.farcasterFid}.`
-        : "Farcaster username may be saved, but inbox alerts are not live until you enable the Mini App from Agent Terminal."
-      );
+      if (profile.farcasterNotificationsEnabled) {
+        setStatus(`Farcaster inbox alerts are live for @${profile.farcasterUsername ?? profile.farcasterFid}.`);
+      } else if (profile.emailAlertsEnabled && profile.emailAddress) {
+        setStatus(`Email alerts are live for ${profile.emailAddress}.`);
+      } else {
+        setStatus("Enable Farcaster or email alerts from Agent Terminal before saving preferences.");
+      }
     }
 
     void load();
@@ -93,8 +100,8 @@ export default function AlertsPage() {
   }
 
   async function save(eventTypes: string[], nextEnabled: boolean) {
-    if (!walletAddress || !fid) {
-      setStatus("Enable Farcaster notifications from Agent Terminal before saving preferences.");
+    if (!walletAddress || (!fid && !emailEnabled)) {
+      setStatus("Enable Farcaster or email alerts from Agent Terminal before saving preferences.");
       return;
     }
     try {
@@ -112,13 +119,13 @@ export default function AlertsPage() {
 
   return (
     <>
-      <SectionHeader title="Farcaster Alerts" />
+      <SectionHeader title="Alerts" />
       <section className="two-col">
         <Panel title="Notification Events" badge={canSave ? "LIVE" : "SETUP"}>
           <div className="event-grid">
             <label className="toggle-row">
               <input checked={enabled} onChange={toggleEnabled} type="checkbox" />
-              <span>Enable Farcaster inbox alerts</span>
+              <span>Enable alerts</span>
             </label>
             {alertEvents.map(event => (
               <label className="toggle-row" key={event}>
@@ -133,10 +140,12 @@ export default function AlertsPage() {
             ))}
           </div>
         </Panel>
-        <Panel title="Delivery Status" badge="FARCASTER">
+        <Panel title="Delivery Status" badge={emailEnabled ? "EMAIL" : "FARCASTER"}>
           <div className="panel-body prose-panel">
             <p>{status}</p>
-            <div className="callout">Alerts are sent only for enabled event types and only after Farcaster returns a Mini App notification token for this wallet.</div>
+            <div className="callout">
+              Alerts are sent only for enabled event types. Farcaster inbox delivery is used when available; otherwise BitflowOS sends email alerts{emailAddress ? ` to ${emailAddress}` : ""}.
+            </div>
           </div>
         </Panel>
       </section>

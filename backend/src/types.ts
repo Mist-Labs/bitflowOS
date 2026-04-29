@@ -66,7 +66,7 @@ export interface FarcasterSubscription {
 }
 
 export interface AlertPreference {
-  fid: number;
+  fid?: number;
   walletAddress?: string;
   enabled: boolean;
   eventTypes: AlertEventType[];
@@ -78,6 +78,9 @@ export interface UserProfile {
   walletAddress: string;
   farcasterUsername?: string;
   farcasterFid?: number;
+  emailAddress?: string;
+  emailAlertsEnabled?: boolean;
+  emailAlertsVerifiedAt?: string;
   createdAt: string;
   updatedAt: string;
 }

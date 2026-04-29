@@ -16,7 +16,8 @@ export class UserProfileService {
     const normalized = normalizeWallet(walletAddress);
     if (this.databaseUrl) {
       const result = await getPool(this.databaseUrl).query(
-        `SELECT wallet_address, farcaster_username, farcaster_fid, created_at, updated_at
+        `SELECT wallet_address, farcaster_username, farcaster_fid, email_address,
+                email_alerts_enabled, email_alerts_verified_at, created_at, updated_at
          FROM user_profiles
          WHERE LOWER(wallet_address) = $1`,
         [normalized]
@@ -29,7 +30,8 @@ export class UserProfileService {
   async getByFid(fid: number): Promise<UserProfile | undefined> {
     if (this.databaseUrl) {
       const result = await getPool(this.databaseUrl).query(
-        `SELECT wallet_address, farcaster_username, farcaster_fid, created_at, updated_at
+        `SELECT wallet_address, farcaster_username, farcaster_fid, email_address,
+                email_alerts_enabled, email_alerts_verified_at, created_at, updated_at
          FROM user_profiles
          WHERE farcaster_fid = $1`,
         [fid]
@@ -43,7 +45,8 @@ export class UserProfileService {
     const username = normalizeUsername(usernameInput);
     if (this.databaseUrl) {
       const result = await getPool(this.databaseUrl).query(
-        `SELECT wallet_address, farcaster_username, farcaster_fid, created_at, updated_at
+        `SELECT wallet_address, farcaster_username, farcaster_fid, email_address,
+                email_alerts_enabled, email_alerts_verified_at, created_at, updated_at
          FROM user_profiles
          WHERE LOWER(farcaster_username) = $1`,
         [username.toLowerCase()]
@@ -70,6 +73,9 @@ export class UserProfileService {
       walletAddress,
       farcasterUsername: username,
       farcasterFid: input.farcasterFid ?? existing?.farcasterFid ?? await this.resolveFid(username),
+      emailAddress: existing?.emailAddress,
+      emailAlertsEnabled: existing?.emailAlertsEnabled,
+      emailAlertsVerifiedAt: existing?.emailAlertsVerifiedAt,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now
     };
@@ -82,8 +88,60 @@ export class UserProfileService {
            farcaster_username = EXCLUDED.farcaster_username,
            farcaster_fid = COALESCE(EXCLUDED.farcaster_fid, user_profiles.farcaster_fid),
            updated_at = EXCLUDED.updated_at
-         RETURNING wallet_address, farcaster_username, farcaster_fid, created_at, updated_at`,
+         RETURNING wallet_address, farcaster_username, farcaster_fid, email_address,
+                   email_alerts_enabled, email_alerts_verified_at, created_at, updated_at`,
         [profile.walletAddress, profile.farcasterUsername, profile.farcasterFid ?? null, now, now]
+      );
+      return rowToProfile(result.rows[0]);
+    }
+    return this.profiles.upsert(profile, candidate => normalizeWallet(candidate.walletAddress) === walletAddress);
+  }
+
+  async setEmailAlerts(input: {
+    walletAddress: string;
+    emailAddress: string;
+    enabled?: boolean;
+  }): Promise<UserProfile> {
+    const walletAddress = normalizeWallet(input.walletAddress);
+    const emailAddress = normalizeEmail(input.emailAddress);
+    if (!isValidEmail(emailAddress)) {
+      throw new Error("Enter a valid email address for alerts.");
+    }
+    const now = new Date().toISOString();
+    const existing = await this.get(walletAddress);
+    const profile: UserProfile = {
+      walletAddress,
+      farcasterUsername: existing?.farcasterUsername,
+      farcasterFid: existing?.farcasterFid,
+      emailAddress,
+      emailAlertsEnabled: input.enabled ?? true,
+      emailAlertsVerifiedAt: now,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    };
+    if (this.databaseUrl) {
+      const result = await getPool(this.databaseUrl).query(
+        `INSERT INTO user_profiles (
+           wallet_address, farcaster_username, farcaster_fid, email_address,
+           email_alerts_enabled, email_alerts_verified_at, created_at, updated_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (wallet_address) DO UPDATE SET
+           email_address = EXCLUDED.email_address,
+           email_alerts_enabled = EXCLUDED.email_alerts_enabled,
+           email_alerts_verified_at = EXCLUDED.email_alerts_verified_at,
+           updated_at = EXCLUDED.updated_at
+         RETURNING wallet_address, farcaster_username, farcaster_fid, email_address,
+                   email_alerts_enabled, email_alerts_verified_at, created_at, updated_at`,
+        [
+          profile.walletAddress,
+          profile.farcasterUsername ?? null,
+          profile.farcasterFid ?? null,
+          profile.emailAddress,
+          profile.emailAlertsEnabled ?? true,
+          profile.emailAlertsVerifiedAt ?? now,
+          profile.createdAt,
+          profile.updatedAt
+        ]
       );
       return rowToProfile(result.rows[0]);
     }
@@ -114,11 +172,22 @@ function normalizeUsername(value: string): string {
   return value.replace(/^@/, "").trim();
 }
 
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 254;
+}
+
 function rowToProfile(row: any): UserProfile {
   return {
     walletAddress: row.wallet_address,
     farcasterUsername: row.farcaster_username ?? undefined,
     farcasterFid: row.farcaster_fid ?? undefined,
+    emailAddress: row.email_address ?? undefined,
+    emailAlertsEnabled: row.email_alerts_enabled ?? undefined,
+    emailAlertsVerifiedAt: row.email_alerts_verified_at ? new Date(row.email_alerts_verified_at).toISOString() : undefined,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString()
   };

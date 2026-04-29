@@ -51,6 +51,12 @@ const EnvSchema = z.object({
   CARTRIDGE_NAMESPACE: z.string().optional().default("bitflowos"),
   NEYNAR_API_KEY: z.string().optional().default(""),
   FARCASTER_APP_URL: z.string().url().default("http://localhost:3000"),
+  SMTP_SERVER: z.string().optional().default(""),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_SECURE: z.coerce.boolean().default(false),
+  SMTP_USERNAME: z.string().optional().default(""),
+  SMTP_PASSWORD: z.string().optional().default(""),
+  FROM_EMAIL: z.string().email().or(z.literal("")).default(""),
   DATA_DIR: z.string().default("./data"),
   DATABASE_URL: z.string().url().or(z.literal("")).default(""),
   KIMI_API_KEY: z.string().optional().default(""),
@@ -97,6 +103,12 @@ export interface AppConfig {
   cartridgeNamespace: string;
   neynarApiKey: string;
   farcasterAppUrl: string;
+  smtpServer: string;
+  smtpPort: number;
+  smtpSecure: boolean;
+  smtpUsername: string;
+  smtpPassword: string;
+  fromEmail: string;
   dataDir: string;
   databaseUrl: string;
   kimiApiKey: string;
@@ -151,6 +163,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     cartridgeNamespace: parsed.CARTRIDGE_NAMESPACE,
     neynarApiKey: parsed.NEYNAR_API_KEY,
     farcasterAppUrl: parsed.FARCASTER_APP_URL,
+    smtpServer: parsed.SMTP_SERVER,
+    smtpPort: parsed.SMTP_PORT,
+    smtpSecure: parsed.SMTP_SECURE,
+    smtpUsername: parsed.SMTP_USERNAME,
+    smtpPassword: parsed.SMTP_PASSWORD,
+    fromEmail: parsed.FROM_EMAIL,
     dataDir: parsed.BACKEND_DATA_DIR ?? parsed.DATA_DIR,
     databaseUrl: parsed.DATABASE_URL,
     kimiApiKey: parsed.KIMI_API_KEY,

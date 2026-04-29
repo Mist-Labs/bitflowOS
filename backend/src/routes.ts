@@ -81,7 +81,7 @@ const FarcasterWebhookSchema = z.object({
 }).passthrough();
 
 const AlertPreferenceSchema = z.object({
-  fid: z.number().int().positive(),
+  fid: z.number().int().positive().optional(),
   walletAddress: z.string().optional(),
   enabled: z.boolean(),
   eventTypes: z.array(z.string()),
@@ -146,6 +146,12 @@ const FarcasterClientSubscriptionSchema = z.object({
     url: z.string().url(),
     token: z.string().min(8)
   })
+});
+
+const EmailAlertsSchema = z.object({
+  walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),
+  emailAddress: z.string().email(),
+  enabled: z.boolean().optional().default(true)
 });
 
 export async function registerRoutes(app: FastifyInstance, config: AppConfig): Promise<void> {
@@ -303,7 +309,8 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
     }
     return {
       ...profile,
-      farcasterNotificationsEnabled: await alerts.hasEnabledSubscriptionForWallet(walletAddress)
+      farcasterNotificationsEnabled: await alerts.hasEnabledSubscriptionForWallet(walletAddress),
+      emailAlertsEnabled: await alerts.hasEnabledEmailForWallet(walletAddress)
     };
   });
 
@@ -323,6 +330,22 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
       ],
       farcasterNotificationsEnabled: await alerts.hasEnabledSubscriptionForWallet(input.walletAddress),
       welcome: `Farcaster username saved for @${input.farcasterUsername.replace(/^@/, "")}. To receive inbox alerts, add the BitflowOS Mini App and enable notifications.`
+    };
+  });
+
+  app.post("/api/users/email-alerts", async request => {
+    const input = EmailAlertsSchema.parse(request.body);
+    const profile = await profiles.setEmailAlerts(input);
+    const welcome = await alerts.sendWelcomeEmail({
+      walletAddress: input.walletAddress,
+      emailAddress: input.emailAddress
+    });
+    return {
+      profile,
+      emailAlertsEnabled: await alerts.hasEnabledEmailForWallet(input.walletAddress),
+      welcome: welcome.delivered
+        ? `Email alerts are enabled for ${profile.emailAddress}.`
+        : `Email alerts are saved for ${profile.emailAddress}, but the welcome email could not be sent yet: ${welcome.reason}.`
     };
   });
 

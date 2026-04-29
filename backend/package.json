@@ -22,6 +22,7 @@
     "dotenv": "^16.4.5",
     "ethers": "^6.16.0",
     "fastify": "^5.8.5",
+    "nodemailer": "^8.0.7",
     "pg": "^8.20.0",
     "starknet": "^9.2.1",
     "starkzap": "^3.0.0",
@@ -29,6 +30,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.1",
+    "@types/nodemailer": "^8.0.0",
     "@types/pg": "^8.20.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",

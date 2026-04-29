@@ -220,6 +220,8 @@ export async function getUserProfile(walletAddress: string): Promise<{
   farcasterUsername?: string;
   farcasterFid?: number;
   farcasterNotificationsEnabled?: boolean;
+  emailAddress?: string;
+  emailAlertsEnabled?: boolean;
 }> {
   return getJson(`/api/users/${encodeURIComponent(walletAddress)}`, {
     walletAddress
@@ -240,6 +242,23 @@ export async function setFarcasterUsername(input: {
     throw new Error("Unable to set Farcaster username");
   }
   return response.json() as Promise<{ welcome: string; alerts: string[]; farcasterNotificationsEnabled?: boolean }>;
+}
+
+export async function setEmailAlerts(input: {
+  walletAddress: string;
+  emailAddress: string;
+  enabled?: boolean;
+}): Promise<{ welcome: string; emailAlertsEnabled?: boolean; profile?: { emailAddress?: string } }> {
+  const response = await fetch(`${API_URL}/api/users/email-alerts`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null) as { message?: string } | null;
+    throw new Error(detail?.message ?? "Unable to enable email alerts");
+  }
+  return response.json() as Promise<{ welcome: string; emailAlertsEnabled?: boolean; profile?: { emailAddress?: string } }>;
 }
 
 export async function sendPositionAlert(input: {
@@ -294,7 +313,7 @@ export async function getAlertPreferences(walletAddress: string): Promise<{
 }
 
 export async function setAlertPreferences(input: {
-  fid: number;
+  fid?: number;
   walletAddress?: string;
   enabled: boolean;
   eventTypes: string[];

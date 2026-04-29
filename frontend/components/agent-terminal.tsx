@@ -1,6 +1,6 @@
 "use client";
 
-import { createRecommendation, deployCapital, getUserProfile, getVaultState, saveFarcasterClientSubscription, setFarcasterUsername } from "@/lib/api";
+import { createRecommendation, deployCapital, getUserProfile, getVaultState, saveFarcasterClientSubscription, setEmailAlerts, setFarcasterUsername } from "@/lib/api";
 import type { AllocationRecommendation, VaultState } from "@/lib/types";
 import { Bot, SendHorizonal, TerminalSquare } from "lucide-react";
 import type { FormEvent, ReactNode } from "react";
@@ -24,6 +24,12 @@ type DepositSubmittedEvent = {
 
 const WALLET_KEY = "bitflowos.connectedWallet";
 const SESSION_KEY = "bitflowos.agentSession";
+const FARCASTER_APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://bitflow-os.vercel.app";
+const FARCASTER_ENABLE_GUIDE = [
+  `Open BitflowOS in Farcaster: ${FARCASTER_APP_URL}`,
+  "Tap Open BitflowOS in the Farcaster preview, connect the same wallet, then type `enable` here to allow inbox alerts."
+];
+const EMAIL_ALERT_GUIDE = "If Farcaster setup is not available, enter your email address here and I will send BitflowOS alerts there instead.";
 
 type AgentSession = {
   walletAddress: string;
@@ -43,7 +49,7 @@ export function AgentTerminal() {
   const [discoveredAddress, setDiscoveredAddress] = useState("");
   const [messages, setMessages] = useState<string[]>([
     "Hello. I am the BitflowOS allocation agent.",
-    "I will check login, deposit state, strategy readiness, 0G verification, and Farcaster alerts before capital moves."
+    "I will check login, deposit state, strategy readiness, 0G verification, and alerts before capital moves."
   ]);
 
   const walletAddress = wallet?.address ?? discoveredAddress;
@@ -228,6 +234,10 @@ export function AgentTerminal() {
         await requestFarcasterNotifications();
         return;
       }
+      if (isEmailAddress(value)) {
+        await enableEmailAlerts(value);
+        return;
+      }
       if (value.toLowerCase() === "deposited") {
         setStep("watching");
         pushOnce("That looks like a deposit status, not a Farcaster handle. I am checking vault state instead.");
@@ -235,7 +245,7 @@ export function AgentTerminal() {
         return;
       }
       if (!walletAddress) {
-        pushOnce("I need a Starknet wallet address to attach the Farcaster username.");
+        pushOnce("I need a Starknet wallet address to attach alerts.");
         return;
       }
       setBusy(true);
@@ -248,7 +258,8 @@ export function AgentTerminal() {
           setMessages(current => [
             ...current,
             result.welcome,
-            "Type `enable` to add BitflowOS in Farcaster and turn on inbox alerts."
+            ...FARCASTER_ENABLE_GUIDE,
+            EMAIL_ALERT_GUIDE
           ]);
           setStep("farcaster");
         }
@@ -268,13 +279,18 @@ export function AgentTerminal() {
     if (!walletAddress) {
       setBusy(false);
       setStep("farcaster");
-      pushOnce("I need a Starknet wallet address to attach Farcaster alerts.");
+      pushOnce("I need a Starknet wallet address to attach alerts.");
       return;
     }
 
     try {
       const username = await getFarcasterUsername();
       const profile = await getFarcasterProfile();
+      if (profile?.emailAlertsEnabled && profile.emailAddress) {
+        setMessages(current => [...current, `Email alerts are live for ${profile.emailAddress}. You are set.`]);
+        setStep("done");
+        return;
+      }
       if (profile?.farcasterUsername && profile.farcasterNotificationsEnabled) {
         setMessages(current => [...current, `Farcaster inbox alerts are live for @${profile.farcasterUsername}. You are set.`]);
         setStep("done");
@@ -286,7 +302,8 @@ export function AgentTerminal() {
         setMessages(current => [
           ...current,
           `Farcaster username @${handle} is saved, but inbox alerts are not live yet.`,
-          "Type `enable` to add BitflowOS in Farcaster and enable notifications."
+          ...FARCASTER_ENABLE_GUIDE,
+          EMAIL_ALERT_GUIDE
         ]);
         return;
       }
@@ -294,13 +311,13 @@ export function AgentTerminal() {
       setStep("farcaster");
       setMessages(current => [
         ...current,
-        "Farcaster is not set for this wallet. Enter your Farcaster username for alerts:"
+        "Alerts are not set for this wallet. Enter your Farcaster username, or enter an email address for email alerts:"
       ]);
     } catch {
       setStep("farcaster");
       setMessages(current => [
         ...current,
-        "Farcaster is not set for this wallet. Enter your Farcaster username for alerts:"
+        "Alerts are not set for this wallet. Enter your Farcaster username, or enter an email address for email alerts:"
       ]);
     } finally {
       setBusy(false);
@@ -309,6 +326,11 @@ export function AgentTerminal() {
 
   async function checkFarcasterReady(doneMessage: string) {
     const profile = await getFarcasterProfile();
+    if (profile?.emailAlertsEnabled && profile.emailAddress) {
+      setMessages(current => [...current, `Email alerts are live for ${profile.emailAddress}. You are set.`]);
+      setStep("done");
+      return;
+    }
     if (profile?.farcasterUsername && profile.farcasterNotificationsEnabled) {
       setMessages(current => [...current, doneMessage.replace("{username}", profile.farcasterUsername ?? "")]);
       setStep("done");
@@ -316,7 +338,24 @@ export function AgentTerminal() {
     }
 
     setStep("farcaster");
-    pushOnce("Farcaster is not set for this wallet. Enter your Farcaster username for alerts:");
+    pushOnce("Alerts are not set for this wallet. Enter your Farcaster username, or enter an email address for email alerts:");
+  }
+
+  async function enableEmailAlerts(emailAddress: string) {
+    if (!walletAddress) {
+      pushOnce("Connect the Starknet wallet first so I can attach email alerts to the correct account.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await setEmailAlerts({ walletAddress, emailAddress, enabled: true });
+      setMessages(current => [...current, result.welcome, "Email alerts are attached to this wallet. You are set."]);
+      setStep("done");
+    } catch (error) {
+      pushOnce((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function waitForDepositAndAllocate() {
@@ -461,7 +500,7 @@ export function AgentTerminal() {
       const { sdk } = await import("@farcaster/miniapp-sdk");
       const inMiniApp = await sdk.isInMiniApp();
       if (!inMiniApp) {
-        pushOnce("Open BitflowOS inside Farcaster, then use `enable` here to turn on inbox alerts.");
+        setMessages(current => [...current, ...[...FARCASTER_ENABLE_GUIDE, EMAIL_ALERT_GUIDE].filter(message => !current.includes(message))]);
         return;
       }
       const context = await sdk.context;
@@ -529,7 +568,7 @@ export function AgentTerminal() {
     if (step === "watching") return "watching vault";
     if (step === "allocating") return "allocating";
     if (step === "confirm") return "type confirm";
-    if (step === "farcaster") return "enter Farcaster username";
+    if (step === "farcaster") return "username or email";
     if (step === "done") return "ask for action";
     return "deploying";
   }, [step]);
@@ -566,6 +605,10 @@ export function AgentTerminal() {
       </form>
     </aside>
   );
+}
+
+function isEmailAddress(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
 
 function formatRecommendation(recommendation: AllocationRecommendation): string {
