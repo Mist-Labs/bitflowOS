@@ -407,7 +407,7 @@ function recommendationApy(recommendation: AllocationRecommendation) {
 }
 
 function compactUnits(value: bigint, decimals: number) {
-  if (decimals <= 0) return value.toString();
+  if (decimals <= 0) return value >= 10000n ? compactWhole(value) : value.toString();
   const divisor = 10n ** BigInt(decimals);
   const oneSatoshi = decimals > 8 ? 10n ** BigInt(decimals - 8) : 1n;
   if (value > 0n && value < oneSatoshi) return "<0.00000001";
