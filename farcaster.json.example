@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "",
+    "payload": "",
+    "signature": ""
+  },
+  "frame": {
+    "version": "1",
+    "name": "BitflowOS",
+    "iconUrl": "https://YOUR_DOMAIN/icon.png",
+    "homeUrl": "https://YOUR_DOMAIN",
+    "imageUrl": "https://YOUR_DOMAIN/og.png",
+    "buttonTitle": "Open BitflowOS",
+    "splashImageUrl": "https://YOUR_DOMAIN/splash.png",
+    "splashBackgroundColor": "#0b0f14",
+    "webhookUrl": "https://YOUR_API_DOMAIN/api/alerts/farcaster/webhook"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "bitflowos-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "check": "next build"
+  },
+  "dependencies": {
+    "@cartridge/controller": "^0.13.12",
+    "@privy-io/react-auth": "^3.22.2",
+    "@solana/web3.js": "^1.98.4",
+    "@starknet-io/get-starknet": "^4.0.8",
+    "lucide-react": "^0.468.0",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sats-connect": "3.5.0",
+    "starknet": "^9.2.1",
+    "starkzap": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/react": "^19.0.1",
+    "@types/react-dom": "^19.0.2",
+    "eslint": "^9.17.0",
+    "eslint-config-next": "^15.1.0",
+    "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "axios": "^1.15.2",
+    "postcss": "^8.5.12",
+    "valibot": "^1.2.0"
+  }
+}

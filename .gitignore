@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+!contracts/.env.example
+!backend/.env.example
+node_modules
+dist
+.next
+coverage
+data
+MAINNET_LAUNCH_CHECKLIST.md
+SEPOLIA_DEPLOYMENT_REPORT.md
+SECURITY_PREDEPLOY_REVIEW.md
+bitflowos_updated_product_doc_v_2.md
+ENVIRONMENT.md
+SKILL.md

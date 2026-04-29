@@ -1,0 +1,141 @@
+{
+  "network": "starknet-mainnet",
+  "last_verified": "2026-04-28",
+  "sources": {
+    "vesu": "https://docs.vesu.xyz/developers/contract-addresses",
+    "ekubo": "https://docs.ekubo.org/integration-guides/reference/starknet-contracts",
+    "endur": "https://docs.endur.fi/docs/developers/contracts",
+    "zero_d": "https://docs.0d.finance/0d/introduction and https://api.0d.finance/v1/vaults/7",
+    "noon": "https://docs.noon.capital/additional-resources/contracts-and-addresses",
+    "troves": "https://docs.troves.fi/p/developers/contracts"
+    ,
+    "atomiq": "https://docs.atomiq.exchange/ and https://www.npmjs.com/package/@atomiqlabs/sdk"
+  },
+  "adapter_routing": {
+    "mainnet_ready": {
+      "endur_btc_lsts": {
+        "adapter": "Erc4626VaultAdapter",
+        "abi": "ERC4626 deposit(assets, receiver), withdraw(assets, receiver, owner), convert_to_assets(shares), asset()",
+        "assets": ["wbtc", "tbtc", "lbtc", "solvbtc"],
+        "status": "ready_after_configuring_each_underlying_asset_to_its_lst_vault"
+      },
+      "vesu_supply_vtokens": {
+        "adapter": "Erc4626VaultAdapter",
+        "abi": "Vesu V2 vToken ERC4626",
+        "status": "ready_after_resolving_pool_asset_vtoken_addresses_from_pool_factory_or_curator_dashboard"
+      },
+      "vesu_collateral_borrow": {
+        "adapter": "LeveragedVaultAdapter",
+        "abi": "Vesu V2 Pool modify_position(ModifyPositionParams), position(...), check_collateralization(...)",
+        "status": "abi_aligned_with_official_vesu_v2_pool_source"
+      },
+      "zero_d_usdc_carry": {
+        "adapter": "Erc4626VaultAdapter",
+        "abi": "ERC4626-compatible vault route pending final explorer ABI check",
+        "status": "address_available"
+      },
+      "ekubo_liquidity": {
+        "adapter": "EkuboAdapter",
+        "abi": "Ekubo Positions mint_v2, deposit_amounts, withdraw_v2, collect_fees, get_token_info",
+        "status": "abi_aligned_with_official_ekubo_positions_source"
+      }
+    },
+    "not_routed_until_manual_discovery": {
+      "troves": "strategy contracts are listed inside each strategy manage tab, not in public contract docs",
+      "noon": "official docs publish USN/sUSN tokens but no Starknet staking or vault contract"
+    }
+  },
+  "protocols": {
+    "vesu": {
+      "pool_factory": "0x3760f903a37948f97302736f89ce30290e45f441559325026842b7a6fb388c0",
+      "oracle": "0xfe4bfb1b353ba51eb34dff963017f94af5a5cf8bdf3dfc191c504657f3c05",
+      "multiply": "0x7964760e90baa28841ec94714151e03fbc13321797e68a874e88f27c9d58513",
+      "pools": {
+        "prime": "0x451fe483d5921a2919ddd81d0de6696669bccdacd859f72a4fba7656b97c3b5",
+        "re7_usdc_core": "0x3976cac265a12609934089004df458ea29c776d77da423c96dc761d09d24124",
+        "re7_usdc_prime": "0x2eef0c13b10b487ea5916b54c0a7f98ec43fb3048f60fdeedaf5b08f6f88aaf",
+        "re7_usdc_frontier": "0x5c03e7e0ccfe79c634782388eb1e6ed4e8e2a013ab0fcc055140805e46261bd",
+        "re7_xbtc": "0x3a8416bf20d036df5b1cf3447630a2e1cb04685f6b0c3a70ed7fb1473548ecf",
+        "re7_usdc_stable_core": "0x73702fce24aba36da1eac539bd4bae62d4d6a76747b7cdd3e016da754d7a135"
+      }
+    },
+    "ekubo": {
+      "core": "0x00000005dd3D2F4429AF886cD1a3b08289DBcEa99A294197E9eB43b0e0325b4b",
+      "positions": "0x02e0af29598b407c8716b17f6d2795eca1b471413fa03fb145a5e33722184067",
+      "positions_nft": "0x07b696af58c967c1b14c9dde0ace001720635a660a8e90c565ea459345318b30",
+      "router_v3_0_13": "0x0199741822c2dc722f6f605204f35e56dbc23bceed54818168c4c49e4fb8737e",
+      "token_registry_v3": "0x064bdb4094881140bc39340146c5fcc5a187a98aec5a53f448ac702e5de5067e"
+    },
+    "ekubo_sepolia": {
+      "core": "0x0444a09d96389aa7148f1aada508e30b71299ffe650d9c97fdaae38cb9a23384",
+      "positions": "0x06a2aee84bb0ed5dded4384ddd0e40e9c1372b818668375ab8e3ec08807417e5",
+      "positions_nft": "0x04afc78d6fec3b122fc1f60276f074e557749df1a77a93416451be72c435120f",
+      "router_v3_0_13": "0x0045f933adf0607292468ad1c1dedaa74d5ad166392590e72676a34d01d7b763",
+      "token_registry_v3": "0x04484f91f0d2482bad844471ca8dc8e846d3a0211792322e72f21f0f44be63e5"
+    },
+    "endur": {
+      "xstrk": "0x28d709c875c0ceac3dce7065bec5328186dc89fe254527084d1689910954b0a",
+      "withdraw_queue_nft": "0x518a66e579f9eb1603f5ffaeff95d3f013788e9c37ee94995555026b9648b6",
+      "validator_registry": "0x029edbca81c979decd6ee02205127e8b10c011bca1d337141170095eba690931",
+      "btc_lsts": {
+        "wbtc": {
+          "lst": "0x6a567e68c805323525fe1649adb80b03cddf92c23d2629a6779f54192dffc13",
+          "withdraw_queue": "0x670cdfa77487203cdf11d58db9617988d3a8fc2b22730594ed7d193a0430f72"
+        },
+        "tbtc": {
+          "lst": "0x43a35c1425a0125ef8c171f1a75c6f31ef8648edcc8324b55ce1917db3f9b91",
+          "withdraw_queue": "0x35b194007fb5d9fd10cb1f8772ef45cced853e7b3239367de0e19ecba85d75a"
+        },
+        "lbtc": {
+          "lst": "0x7dd3c80de9fcc5545f0cb83678826819c79619ed7992cc06ff81fc67cd2efe0",
+          "withdraw_queue": "0x293caaca81259f02f17bd85de5056624626fc7cb25ff79f104c3ef07a4649ec"
+        },
+        "solvbtc": {
+          "lst": "0x580f3dc564a7b82f21d40d404b3842d490ae7205e6ac07b1b7af2b4a5183dc9",
+          "withdraw_queue": "0x45f4f8affbfa6ef794f3b5eee7855bd19321745c5b442ad935cad4ae6a61006"
+        }
+      }
+    },
+    "endur_sepolia": {
+      "xstrk": "0x42de5b868da876768213c48019b8d46cd484e66013ae3275f8a4b97b31fc7eb",
+      "withdraw_queue_nft": "0x254cbdaf8275cb1b514ae63ccedb04a3a9996b1489829e5d6bbaf759ac100b6",
+      "btc_lsts": "work_in_progress_in_official_docs"
+    },
+    "zero_d": {
+      "vaults": {
+        "usdc_carry": {
+          "id": "7",
+          "name": "0D Usdc Carry",
+          "symbol": "0D-USDC-V2",
+          "base_asset": "USDC",
+          "status": "live",
+          "contract": "0x06C9eC978898F11B1554662aD49B2892c20957325bb366d371c4b12238FeFa62",
+          "api_endpoint": "https://api-jaffar-usdc.production.pragma.build"
+        }
+      }
+    },
+    "noon": {
+      "tokens": {
+        "usn": "0x01e6545cab7ba4ac866768ba5e1bd540893762286ed3fea7f9c02bfa147e135b",
+        "susn": "0x02411565ef1a14decfbe83d2e987cced918cd752508a3d9c55deb67148d14d17"
+      },
+      "starknet_staking_contract": null,
+      "note": "Official docs publish Starknet USN and sUSN token addresses but not a Starknet staking contract address. Use as yield-token route only after swap/liquidity path is confirmed."
+    },
+    "troves": {
+      "security": {
+        "access_control": "0x0636a3f51cc37f5729e4da4b1de6a8549a28f3c0d5bf3b17f150971e451ff9c2",
+        "timelock": "0x0613a26e199f9bafa9418567f4ef0d78e9496a8d6aab15fba718a2ec7f2f2f69"
+      },
+      "strategy_contracts": "requires_runtime_config_from_troves_strategy_manage_page",
+      "note": "Troves docs say strategy contracts are listed in each strategy manage tab, not on the public contracts page."
+    },
+    "atomiq": {
+      "role": "native_btc_and_lightning_btc_onboarding",
+      "backend_packages": ["@atomiqlabs/sdk", "@atomiqlabs/chain-starknet"],
+      "flow": "BTC or BTCLN -> Atomiq -> user Starknet wallet -> BitflowOS vault",
+      "default_output_token": "WBTC",
+      "custody_model": "non_custodial_user_wallet_receives_starknet_btc_before_vault_deposit"
+    }
+  }
+}

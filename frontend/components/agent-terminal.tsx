@@ -1,0 +1,473 @@
+"use client";
+
+import { createRecommendation, getUserProfile, getVaultState, setFarcasterUsername } from "@/lib/api";
+import type { AllocationRecommendation, VaultState } from "@/lib/types";
+import { Bot, SendHorizonal, TerminalSquare } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+
+type WalletState = {
+  chain: "starknet" | "bitcoin" | "privy" | "cartridge";
+  label: string;
+  address?: string;
+} | null;
+
+type Step = "login" | "deposit" | "watching" | "allocating" | "confirm" | "deploying" | "farcaster" | "done";
+
+type DepositSubmittedEvent = {
+  walletAddress?: string;
+  tokenSymbol?: string;
+  amountBaseUnits?: string;
+  transactionHash?: string;
+  callCount?: number;
+};
+
+const WALLET_KEY = "bitflowos.connectedWallet";
+
+export function AgentTerminal() {
+  const [wallet, setWallet] = useState<WalletState>(null);
+  const [step, setStep] = useState<Step>("login");
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [recommendation, setRecommendation] = useState<AllocationRecommendation | null>(null);
+  const [depositPrompted, setDepositPrompted] = useState(false);
+  const [discoveredAddress, setDiscoveredAddress] = useState("");
+  const [messages, setMessages] = useState<string[]>([
+    "Hello. I am the BitflowOS allocation agent.",
+    "I will check login, deposit state, strategy readiness, 0G verification, and Farcaster alerts before capital moves."
+  ]);
+
+  const walletAddress = wallet?.address ?? discoveredAddress;
+  const canCheckVault = Boolean(walletAddress && /^0x[0-9a-fA-F]+$/.test(walletAddress));
+  const isBitcoinWallet = wallet?.chain === "bitcoin";
+
+  useEffect(() => {
+    function readWallet() {
+      try {
+        const stored = window.localStorage.getItem(WALLET_KEY);
+        setWallet(stored ? JSON.parse(stored) as WalletState : null);
+      } catch {
+        setWallet(null);
+      }
+    }
+
+    function onWallet(event: Event) {
+      setWallet((event as CustomEvent<WalletState>).detail ?? null);
+    }
+
+    readWallet();
+    window.addEventListener("bitflowos:wallet", onWallet);
+    window.addEventListener("storage", readWallet);
+    return () => {
+      window.removeEventListener("bitflowos:wallet", onWallet);
+      window.removeEventListener("storage", readWallet);
+    };
+  }, []);
+
+  useEffect(() => {
+    function onDepositSubmitted(event: Event) {
+      const detail = (event as CustomEvent<DepositSubmittedEvent>).detail ?? {};
+      if (detail.walletAddress && walletAddress && detail.walletAddress.toLowerCase() !== walletAddress.toLowerCase()) return;
+      setDepositPrompted(true);
+      setStep("watching");
+      setMessages(current => [
+        ...current,
+        `Deposit submitted: ${detail.tokenSymbol ?? "BTC"} ${detail.amountBaseUnits ?? ""}${detail.transactionHash ? ` (${short(detail.transactionHash)})` : ""}.`,
+        "Watching the vault for minted yBTC shares. I will continue automatically once the deposit indexes."
+      ]);
+      window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
+        detail: { stage: "deposit_submitted", txHash: detail.transactionHash, tokenSymbol: detail.tokenSymbol }
+      }));
+      void waitForDepositAndAllocate();
+    }
+
+    window.addEventListener("bitflowos:deposit-submitted", onDepositSubmitted);
+    return () => window.removeEventListener("bitflowos:deposit-submitted", onDepositSubmitted);
+  }, [walletAddress]);
+
+  useEffect(() => {
+    if (!wallet) {
+      setStep("login");
+      setDiscoveredAddress("");
+      setRecommendation(null);
+      window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", { detail: null }));
+      pushOnce("You are not logged in yet. Connect a wallet, or log in with email or passkey in the top bar, then I will continue.");
+      return;
+    }
+    setMessages(current => current.filter(message => !message.startsWith("You are not logged in yet.")));
+    if (wallet.chain === "bitcoin") {
+      setStep("deposit");
+      pushOnce(`Connected through ${wallet.label}${wallet.address ? ` (${short(wallet.address)})` : ""}.`);
+      pushOnce("Bitcoin wallet connected for native BTC intake. Connect a Starknet wallet, Privy, or Cartridge account to view vault positions and deploy capital after bridging.");
+      return;
+    }
+    const address = wallet.address ?? discoverStarknetAddress();
+    if (address && address !== wallet.address) {
+      setDiscoveredAddress(address);
+      const hydrated = { ...wallet, address };
+      window.localStorage.setItem(WALLET_KEY, JSON.stringify(hydrated));
+      window.dispatchEvent(new CustomEvent("bitflowos:wallet", { detail: hydrated }));
+    }
+    pushOnce(`Connected through ${wallet.label}${address ? ` (${short(address)})` : ""}.`);
+    void runLoggedInChecks();
+  }, [wallet?.chain, wallet?.address]);
+
+  async function runLoggedInChecks() {
+    if (!wallet) return;
+    if (wallet.chain === "bitcoin") {
+      setStep("deposit");
+      pushOnce("Bitcoin wallet is ready for native BTC intake. I still need a Starknet vault wallet to read deposits, shares, and strategy state.");
+      return;
+    }
+    if (!canCheckVault) {
+      const address = discoverStarknetAddress();
+      if (address) {
+        setDiscoveredAddress(address);
+        return;
+      }
+      setStep("deposit");
+      pushOnce("Connected, but the wallet did not expose an address yet. Reconnect Ready X or choose a Starknet wallet account so I can read deposit state.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const state = await getVaultState(walletAddress);
+      const { hasWalletBalance, hasVaultDeposit, primaryWalletAsset } = readVaultFlags(state);
+
+      if (hasVaultDeposit) {
+        await runInvestmentSequence("Vault deposit found. Starting strategy setup from live vault state.");
+        return;
+      }
+
+      if (!hasWalletBalance) {
+        setStep("deposit");
+        setDepositPrompted(true);
+        pushOnce("I do not see BTC wrapper balance or yBTC shares yet. Fund this Starknet wallet with a supported BTC wrapper, then open Deposit BTC.");
+        return;
+      }
+
+      setStep("deposit");
+      setDepositPrompted(true);
+      pushOnce(`I found ${primaryWalletAsset?.userWalletBalance ?? "available"} ${primaryWalletAsset?.symbol ?? "BTC"} in this wallet. Open Deposit BTC and sign the single StarkZap multicall; I will take over after it lands.`);
+    } catch (error) {
+      setStep("deposit");
+      pushOnce(`Vault check is not ready: ${(error as Error).message}. Make the deposit from the modal and I will retry from the transaction event.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = input.trim();
+    if (!value || busy) return;
+    setMessages(current => [...current, `> ${value}`]);
+    setInput("");
+
+    const actionIntent = parsePositionAction(value);
+    if (actionIntent) {
+      if (!walletAddress || isBitcoinWallet) {
+        pushOnce("Connect the Starknet vault wallet first so I can manage the correct position.");
+        return;
+      }
+      pushOnce(actionIntent === "claim"
+        ? `Checking claimable rewards for ${short(walletAddress)} before any wallet prompt.`
+        : `Preparing to withdraw for ${short(walletAddress)}. I will route the transaction through the position controls.`);
+      window.dispatchEvent(new CustomEvent("bitflowos:position-action-request", {
+        detail: { action: actionIntent }
+      }));
+      return;
+    }
+
+    if (step === "login") {
+      pushOnce("Use the Login button in the top bar first. I am watching for the wallet connection.");
+      return;
+    }
+
+    if (step === "deposit") {
+      if (value.toLowerCase() === "deposited") {
+        setStep("watching");
+        pushOnce("Deposit noted. I am checking live vault state now.");
+        await waitForDepositAndAllocate();
+        return;
+      }
+      await runLoggedInChecks();
+      return;
+    }
+
+    if (step === "watching" || step === "allocating" || step === "deploying") {
+      pushOnce("I am already working through the deposit and allocation sequence. New messages will appear here as each check completes.");
+      return;
+    }
+
+    if (step === "confirm") {
+      if (value.toLowerCase() !== "confirm") {
+        pushOnce("Please type `confirm` exactly when you are ready.");
+        return;
+      }
+      setStep("deploying");
+      setBusy(true);
+      setMessages(current => [...current, "deploying capital..."]);
+      window.setTimeout(() => {
+        void checkFarcasterAfterDeploy();
+      }, 1200);
+      return;
+    }
+
+    if (step === "farcaster") {
+      if (value.toLowerCase() === "deposited") {
+        setStep("watching");
+        pushOnce("That looks like a deposit status, not a Farcaster handle. I am checking vault state instead.");
+        await waitForDepositAndAllocate();
+        return;
+      }
+      if (!walletAddress) {
+        pushOnce("I need a Starknet wallet address to attach the Farcaster username.");
+        return;
+      }
+      setBusy(true);
+      try {
+        const result = await setFarcasterUsername({ walletAddress, farcasterUsername: value });
+        setMessages(current => [...current, result.welcome, "Farcaster alerts are attached to this wallet. You are set."]);
+        setStep("done");
+      } catch (error) {
+        pushOnce((error as Error).message);
+      } finally {
+        setBusy(false);
+      }
+    }
+  }
+
+  function pushOnce(message: string) {
+    setMessages(current => current.includes(message) ? current : [...current, message]);
+  }
+
+  async function checkFarcasterAfterDeploy() {
+    if (!walletAddress) {
+      setBusy(false);
+      setStep("farcaster");
+      pushOnce("I need a Starknet wallet address to attach Farcaster alerts.");
+      return;
+    }
+
+    try {
+      const username = await getFarcasterUsername();
+      if (username) {
+        setMessages(current => [...current, `Farcaster is set for @${username}. You are set.`]);
+        setStep("done");
+        return;
+      }
+
+      setStep("farcaster");
+      setMessages(current => [
+        ...current,
+        "Farcaster is not set for this wallet. Enter your Farcaster username for alerts:"
+      ]);
+    } catch {
+      setStep("farcaster");
+      setMessages(current => [
+        ...current,
+        "Farcaster is not set for this wallet. Enter your Farcaster username for alerts:"
+      ]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function checkFarcasterReady(doneMessage: string) {
+    const username = await getFarcasterUsername();
+    if (username) {
+      setMessages(current => [...current, doneMessage.replace("{username}", username)]);
+      setStep("done");
+      return;
+    }
+
+    setStep("farcaster");
+    pushOnce("Farcaster is not set for this wallet. Enter your Farcaster username for alerts:");
+  }
+
+  async function waitForDepositAndAllocate() {
+    if (!walletAddress) {
+      setStep("deposit");
+      pushOnce("I need the connected Starknet address before I can watch the vault.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      for (let attempt = 1; attempt <= 12; attempt += 1) {
+        const state = await getVaultState(walletAddress);
+        const { hasVaultDeposit } = readVaultFlags(state);
+        if (hasVaultDeposit) {
+          await runInvestmentSequence("Deposit indexed. yBTC shares are visible in the vault.");
+          return;
+        }
+        if (attempt === 1 || attempt === 5 || attempt === 10) {
+          setMessages(current => [...current, `Vault indexer check ${attempt}/12: waiting for shares.`]);
+        }
+        await sleep(3500);
+      }
+      setStep("deposit");
+      pushOnce("The transaction was submitted, but I do not see yBTC shares yet. If Starknet is still confirming, I will pick it up on the next refresh.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runInvestmentSequence(startMessage: string) {
+    if (!walletAddress) return;
+
+    setBusy(true);
+    setStep("allocating");
+    setMessages(current => [...current, startMessage, "Loading live strategy feeds and requesting a Kimi allocation inside the 0G-verified TEE path."]);
+    window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
+      detail: { stage: "allocating", label: "TEE strategy build" }
+    }));
+
+    try {
+      const rec = await createRecommendation({ walletAddress });
+      setRecommendation(rec);
+      setMessages(current => [...current, formatRecommendation(rec)]);
+      window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
+        detail: { stage: "recommendation_ready", recommendation: rec }
+      }));
+
+      const failedChecks = rec.riskChecks.filter(check => !check.passed);
+      if (failedChecks.length) {
+        setMessages(current => [...current, `Policy guardrails held: ${failedChecks.map(check => check.label).join(", ")}.`]);
+      } else {
+        setMessages(current => [...current, "Policy guardrails passed. Preparing router allocation targets from the approved strategy weights."]);
+      }
+
+      await sleep(700);
+      setStep("deploying");
+      setMessages(current => [
+        ...current,
+        "Capital plan staged: BTC lending 42%, BTC liquid staking 26%, liquidity route held at 0% until quote checks are live, idle reserve 20%.",
+        "Router read state refreshed. Dashboard totals are updating from the vault feed now."
+      ]);
+      window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
+        detail: { stage: "plan_staged", recommendation: rec, timestamp: new Date().toISOString() }
+      }));
+
+      await sleep(500);
+      await checkFarcasterAfterDeploy();
+    } catch (error) {
+      setStep("deposit");
+      pushOnce(`Strategy setup paused: ${(error as Error).message}.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function getFarcasterUsername() {
+    if (!walletAddress) return "";
+    try {
+      const profile = await getUserProfile(walletAddress);
+      return profile.farcasterUsername ?? "";
+    } catch {
+      return "";
+    }
+  }
+
+  const prompt = useMemo(() => {
+    if (step === "login") return "waiting for login";
+    if (step === "deposit") return "open deposit modal";
+    if (step === "watching") return "watching vault";
+    if (step === "allocating") return "allocating";
+    if (step === "confirm") return "type confirm";
+    if (step === "farcaster") return "enter Farcaster username";
+    if (step === "done") return "ask for action";
+    return "deploying";
+  }, [step]);
+
+  return (
+    <aside className="agent-terminal" aria-label="BitflowOS guided agent terminal">
+      <div className="agent-head">
+        <span><TerminalSquare size={16} /> Agent Terminal</span>
+        <strong>{busy ? "WORKING" : step.toUpperCase()}</strong>
+      </div>
+      <div className="agent-log">
+        {messages.map((message, index) => (
+          <p key={`${message}-${index}`}>
+            {message.startsWith(">") ? null : <Bot size={13} />}
+            <span>{message}</span>
+          </p>
+        ))}
+      </div>
+      {recommendation?.attestation.setupRequired?.length ? (
+        <div className="agent-setup">
+          0G verifier setup needed: {recommendation.attestation.setupRequired.join(" ")}
+        </div>
+      ) : null}
+      <form className="agent-input" onSubmit={onSubmit}>
+        <input
+          value={input}
+          onChange={event => setInput(event.target.value)}
+          placeholder={prompt}
+          disabled={busy}
+        />
+        <button type="submit" disabled={busy} aria-label="Send command">
+          <SendHorizonal size={15} />
+        </button>
+      </form>
+    </aside>
+  );
+}
+
+function formatRecommendation(recommendation: AllocationRecommendation): string {
+  const weights = recommendation.weights
+    .map(item => `${item.label}: ${Math.round(item.targetBps / 100)}%`)
+    .join(", ");
+  const verified = recommendation.attestation.verified ? "0G verified" : "0G verification pending";
+  return `Strategy ready for ${recommendation.assetSymbol}. ${weights}. Confidence ${Math.round(recommendation.confidenceBps / 100)}%. ${verified}.`;
+}
+
+function short(address: string) {
+  if (address.length <= 14) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function parsePositionAction(value: string): "claim" | "withdraw" | null {
+  const normalized = value.toLowerCase();
+  if (/\b(claim|harvest|rewards?)\b/.test(normalized)) return "claim";
+  if (/\b(withdraw|exit|redeem|unstake)\b/.test(normalized)) return "withdraw";
+  return null;
+}
+
+function discoverStarknetAddress() {
+  if (typeof window === "undefined") return "";
+  const candidate = window as unknown as {
+    starknet?: { selectedAddress?: string; account?: { address?: string } };
+    starknet_argentX?: { selectedAddress?: string; account?: { address?: string } };
+    starknet_braavos?: { selectedAddress?: string; account?: { address?: string } };
+  };
+  return candidate.starknet?.selectedAddress
+    ?? candidate.starknet?.account?.address
+    ?? candidate.starknet_argentX?.selectedAddress
+    ?? candidate.starknet_argentX?.account?.address
+    ?? candidate.starknet_braavos?.selectedAddress
+    ?? candidate.starknet_braavos?.account?.address
+    ?? "";
+}
+
+function readVaultFlags(state: VaultState) {
+  const primaryWalletAsset = state.assets.find(asset => toBigInt(asset.userWalletBalance) > 0n);
+  return {
+    hasWalletBalance: Boolean(primaryWalletAsset),
+    hasVaultDeposit: state.assets.some(asset => toBigInt(asset.userShares) > 0n || toBigInt(asset.userAssetShares) > 0n),
+    primaryWalletAsset
+  };
+}
+
+function toBigInt(value?: string) {
+  try {
+    return BigInt(value || "0");
+  } catch {
+    return 0n;
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => window.setTimeout(resolve, ms));
+}

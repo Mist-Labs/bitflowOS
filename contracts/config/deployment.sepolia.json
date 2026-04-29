@@ -1,0 +1,121 @@
+{
+  "network": "starknet-sepolia",
+  "status": "partial_protocol_coverage",
+  "rpc_url": "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_10/IYGN0tUIo9qnUBUv5YN4Y",
+  "deployer_account": "lily",
+  "owner": "0x66643da550bbb5a6d10956273d295d2d5f5d32ae9c8bcfa6c17936db4f4d1df",
+  "deployed_at": "2026-04-28",
+  "class_hashes": {
+    "AttestationRegistry": "0x076ae9db70099b83c28771586007836d104bf4f6eaadf89143ebab5b06f78a97",
+    "YieldVault": "0x070f569923f2e70a3e7d822bc33c92f82f5965a1eff55d616943adb333cc1f93",
+    "StrategyRouter": "0x058fbbf883040e502f3a16db1e0b5deac1977166e63c9c05ef004434504353c2",
+    "Erc4626VaultAdapter": "0x04f8a588973b8b25f8aa2381fb6d6fe1997e625fd2b31dad2bbaf3b87faf7883",
+    "LeveragedVaultAdapter": "0x0776194431c5dd48b57ae29c0d2bc439cddb9d3c70065730c484cf9a24333c72",
+    "EkuboAdapter": "0x06e1b9d64517e5bfd0f4ba5811e4810d17f4d54bf6dc19452760cff261b67b2d",
+    "MockERC20": "0x009a1b73f55279380091d3228ff1d7cebe5629dcd96c4e0e7284caee1f33c890",
+    "MockERC4626Vault": "0x03d7d7d9398e0f616655c8d741ae8cfe4b1ddcb8f82b0d009df76dda91c3e5f5",
+    "MockLeveragedVault": "0x0263d612794d0108810ee351dd0638da66d451585e8207dc6d592102d0a0a1cd"
+  },
+  "deployed_contracts": {
+    "attestation_registry": "0x00d8c385cac59ee7c01b1680e567bc3e678cc7606cf472b63d417ad233f73143",
+    "yield_vault": "0x06af72043c5a57994bc568bb84dcbdd1a72cd35708c20257850d834d5fcbb9f2",
+    "strategy_router": "0x01056e0acdea35a77e7540c189495a4561518f029b108b5d74888d9a0bc89874",
+    "erc4626_vault_adapter": "0x049abe6ed7ec146b5e48fa6397816c9550c0d52c14c394dd5fc287fd4282c8f7",
+    "leveraged_vault_adapter": "0x0507318d204504d8c06abb3e7b4c26def53fb5b59de1d0d213bb26aa58517f6b",
+    "ekubo_adapter": "0x04918e3589781da9a1f04d12efdc579466de60aaa1ad26852dc9bfee3dca266f"
+  },
+  "demo_test_contracts": {
+    "mock_btc_token": "0x005c9ab30b74b3012640f3db3ca5262917893c79c5f80fe17bb30ff4583ef33f",
+    "mock_erc4626_vault": "0x0177ca7400a0ef5ce254b94d1868a5abcefb8c7d9f4533431b8ab7c86199b604",
+    "mock_debt_asset": "0x03fe817875bb32792baac875206925f46880f7c1c66d040a33486b4fc6d0cbbd",
+    "mock_vesu_pool": "0x0252c185190cd7930638c10fd7693ce91e9f71a7371a11a69844eef8012a2a1e",
+    "ekubo_controlled_btc_token": "0x03df50ae4edebcf16a6dafa6b4edf4fc1b51876ca866d62f7d2ae32e8d0a604b",
+    "ekubo_controlled_quote_token": "0x026c35c94c56a747869ba35b75ba238eef1a087f850b58131dd7c65ab6886aad",
+    "note": "Used only because no official Vesu Sepolia pool is listed in stored protocol config."
+  },
+  "post_deploy_transactions": {
+    "yield_vault_set_router": "0x071b44db60cc6491c2fe5c1a286208925990570268190de55966adc8f4e924f1",
+    "attestation_registry_set_consumer": "0x070601b853fdd76206b1b823988b1cf9836fcce574a417bbf86adce1fd57c42a"
+  },
+  "erc4626_test_route": {
+    "strategy_id": "0x45524334363236",
+    "strategy_label": "ERC4626",
+    "asset": "0x005c9ab30b74b3012640f3db3ca5262917893c79c5f80fe17bb30ff4583ef33f",
+    "erc4626_vault": "0x0177ca7400a0ef5ce254b94d1868a5abcefb8c7d9f4533431b8ab7c86199b604",
+    "max_bps": 7000,
+    "share_multiplier": "1000000000000000000",
+    "deposit_cap": "1000000000000",
+    "minted_to_requested_address": {
+      "recipient": "0x040E9753e4A2079f0ECC266c14Caaa82Ff02C37951a496BA567a439b5C2275ee",
+      "amount": "1000000",
+      "tx": "0x047961484f58f96e89f7a7511f228291a5e1589a856a32d16a718ca2432719a4"
+    },
+    "lifecycle_test": {
+      "signed_user": "0x66643da550bbb5a6d10956273d295d2d5f5d32ae9c8bcfa6c17936db4f4d1df",
+      "mint_tx": "0x03d05496e810a80305c431a46888c2adc7403a21520bed296986ef5fa8e4bb1f",
+      "add_supported_asset_tx": "0x0014d9671717a775e4dedd852f9a7e3ff9d071db75d37a5118ed0b853ca1e654",
+      "set_asset_accounting_tx": "0x02ea7e2da221606f1a6544aeae363e4bdbeeecb8468d926d3ef00ee483efcacd",
+      "set_asset_vault_tx": "0x0351e9bfc5ed71a6f3b79725e978b5b59d99f377055085e436ba08e49a4fcea7",
+      "register_strategy_tx": "0x07b68649654db42a3a252839c9e49e849ae10f8a831c5bd3fcca3f8ae710f438",
+      "approve_tx": "0x02abb7971c5d3fa5182817d77d0fd76f709e11c3a268dd0e9422d6b49e02d970",
+      "deposit_tx": "0x0394421d458c3aafdab0553499b79256770f6f8c6ca4b597326ca7573c18c53e",
+      "submit_attestation_tx": "0x070e2ecc519108f9c4148520dd018695cfb9722688715efb88b643f31d066612",
+      "rebalance_tx": "0x073951749c25b618afcd5f20cfd947f1cd10cb44bca0ff7530be2f1613e53c87",
+      "withdraw_from_strategy_tx": "0x0378e8ccfab476ef05df90d0110b57d15078238cb4d44dd37885918f7c75b114",
+      "withdraw_from_vault_tx": "0x00cb32e3a32a32275ae948266cd7cfb49019fe186621ec3b03f66e7894e7265f"
+    }
+  },
+  "available_protocol_tests": {
+    "ekubo": {
+      "available": true,
+      "contracts": {
+        "core": "0x0444a09d96389aa7148f1aada508e30b71299ffe650d9c97fdaae38cb9a23384",
+        "positions": "0x06a2aee84bb0ed5dded4384ddd0e40e9c1372b818668375ab8e3ec08807417e5",
+        "positions_nft": "0x04afc78d6fec3b122fc1f60276f074e557749df1a77a93416451be72c435120f",
+        "router_v3_0_13": "0x0045f933adf0607292468ad1c1dedaa74d5ad166392590e72676a34d01d7b763"
+      },
+      "fixed_test_route": {
+        "status": "controlled_pool_live_tested",
+        "strategy_id": "0x454b4232",
+        "asset": "sBTC_EKUBO_TEST",
+        "asset_address": "0x03df50ae4edebcf16a6dafa6b4edf4fc1b51876ca866d62f7d2ae32e8d0a604b",
+        "pair": "QUOTE_EKUBO_TEST/sBTC_EKUBO_TEST",
+        "token0": "0x026c35c94c56a747869ba35b75ba238eef1a087f850b58131dd7c65ab6886aad",
+        "token1": "0x03df50ae4edebcf16a6dafa6b4edf4fc1b51876ca866d62f7d2ae32e8d0a604b",
+        "pool_id": "controlled-sbtc-ekubo-test",
+        "fee": "170141183460469235273462165868118016",
+        "tick_spacing": 1000,
+        "extension": "0x0",
+        "initial_tick": 3000,
+        "bounds": {
+          "lower": 1000,
+          "upper": 2000
+        },
+        "asset_is_token1": true,
+        "initialize_pool_tx": "0x04fe6ca598631b3bb3916afbf9df1c4f19079cdc550208cdf51654f079f4a467",
+        "configure_position_tx": "0x02074aa88eecfea1129ea022638d3542f985a69d864942ca9360f049518f4c97",
+        "set_slippage_limits_tx": "0x05ea25baf06db58f8e3253737d730ea38cd69626996500ef50de50c1a4fe7cae",
+        "register_strategy_tx": "0x011db97fcca1b82e12fe3934225e7a47fb7f9afba4bd3e4a2ce1c17fae0e3661",
+        "deposit_test_tx": "0x05f88f40024274e4cd85692b30bd2b0558d98c5b36875b632e60a707ed3d77c5",
+        "withdraw_test_tx": "0x06f383d16bc54d68d76d5cd9101a4570df67fd081f6f12c112c85ac5fb4356ba",
+        "ui_execution_gated_reason": "The contract route is live-tested, but UI execution stays gated until the backend quote service supports custom pools or the pool is indexed by Ekubo API."
+      }
+    },
+    "endur": {
+      "available": "partial",
+      "contracts": {
+        "xstrk": "0x42de5b868da876768213c48019b8d46cd484e66013ae3275f8a4b97b31fc7eb",
+        "withdraw_queue_nft": "0x254cbdaf8275cb1b514ae63ccedb04a3a9996b1489829e5d6bbaf759ac100b6"
+      },
+      "btc_lsts": "work_in_progress_in_official_docs"
+    },
+    "vesu": {
+      "available": false,
+      "reason": "Official Vesu V2 contract-address docs list Starknet mainnet only."
+    },
+    "zero_d": {
+      "available": false,
+      "reason": "No official Sepolia vault address confirmed in current stored docs/API."
+    }
+  }
+}

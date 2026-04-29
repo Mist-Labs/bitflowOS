@@ -1,0 +1,56 @@
+{
+  "network": "starknet-mainnet",
+  "status": "prepared_not_executed",
+  "required_env": {
+    "STARKNET_RPC_URL": "mainnet RPC endpoint",
+    "STARKNET_ACCOUNT": "sncast account profile",
+    "OWNER_ADDRESS": "multisig or deployer owner",
+    "ATTESTATION_SUBMITTER": "backend attestation signer address"
+  },
+  "deployment_order": [
+    {
+      "contract": "AttestationRegistry",
+      "constructor": ["OWNER_ADDRESS", "ATTESTATION_SUBMITTER"]
+    },
+    {
+      "contract": "YieldVault",
+      "constructor": ["OWNER_ADDRESS", "OWNER_ADDRESS"],
+      "post_deploy": ["set_router after StrategyRouter deployment"]
+    },
+    {
+      "contract": "StrategyRouter",
+      "constructor": ["OWNER_ADDRESS", "YieldVault", "AttestationRegistry"],
+      "post_deploy": ["AttestationRegistry.set_consumer(StrategyRouter)", "YieldVault.set_router(StrategyRouter)"]
+    },
+    {
+      "contract": "Erc4626VaultAdapter",
+      "routes": ["Endur BTC LSTs", "Vesu vTokens", "0D vaults"],
+      "constructor": ["OWNER_ADDRESS", "StrategyRouter"],
+      "post_deploy": ["set_asset_vault(asset, vault)", "StrategyRouter.register_strategy(strategy_id, adapter, max_bps)"]
+    },
+    {
+      "contract": "LeveragedVaultAdapter",
+      "routes": ["Vesu collateral/borrow"],
+      "constructor": ["OWNER_ADDRESS", "StrategyRouter", "VESU_POOL", "DEBT_ASSET", "0"],
+      "post_deploy": ["add_supported_asset(collateral_asset)", "StrategyRouter.register_strategy(strategy_id, adapter, max_bps)"]
+    },
+    {
+      "contract": "EkuboAdapter",
+      "routes": ["Ekubo Positions liquidity"],
+      "constructor": ["OWNER_ADDRESS", "StrategyRouter"],
+      "post_deploy": [
+        "configure_position(asset, positions, token0, token1, fee, tick_spacing, extension, lower_mag, lower_sign, upper_mag, upper_sign, token_id, asset_is_token1)",
+        "StrategyRouter.register_strategy(strategy_id, adapter, max_bps)"
+      ]
+    }
+  ],
+  "pre_mainnet_checks": [
+    "scarb build",
+    "scarb test",
+    "verify constructor calldata",
+    "verify protocol addresses against contracts/config/mainnet_protocols.json",
+    "verify adapter owner is multisig/deployer",
+    "register conservative max_bps per strategy",
+    "pause deposits until protocol config is complete"
+  ]
+}
