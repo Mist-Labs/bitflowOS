@@ -1,6 +1,6 @@
 "use client";
 
-import { buildDepositCalls, createBridgeIntent, getVaultState } from "@/lib/api";
+import { buildDepositCalls, createBridgeIntent, getVaultState, sendPositionAlert } from "@/lib/api";
 import { executeStarknetMulticallViaStarkZap } from "@/lib/starkzap-executor";
 import type { TokenConfig, VaultState } from "@/lib/types";
 import { Bitcoin, Send, X } from "lucide-react";
@@ -156,6 +156,15 @@ export function DepositModal({ tokens, vaultState }: { tokens: TokenConfig[]; va
         callCount: execution.callCount
       };
       setResult(`Deposit submitted. StarkZap multicall ${shortHash(execution.hash)} is being watched by the agent.`);
+      if (walletAddress) {
+        void sendPositionAlert({
+          walletAddress,
+          type: "deposit_confirmed",
+          title: "Deposit submitted",
+          body: `BitflowOS deposit was submitted for ${asset}.`,
+          transactionHash: execution.hash
+        });
+      }
       window.dispatchEvent(new CustomEvent("bitflowos:deposit-submitted", { detail }));
       window.dispatchEvent(new CustomEvent("bitflowos:vault-refresh", { detail }));
       window.setTimeout(() => {

@@ -217,6 +217,8 @@ export async function getPrivyStarknetWallet(input: {
 export async function getUserProfile(walletAddress: string): Promise<{
   walletAddress: string;
   farcasterUsername?: string;
+  farcasterFid?: number;
+  farcasterNotificationsEnabled?: boolean;
 }> {
   return getJson(`/api/users/${encodeURIComponent(walletAddress)}`, {
     walletAddress
@@ -227,7 +229,7 @@ export async function setFarcasterUsername(input: {
   walletAddress: string;
   farcasterUsername: string;
   farcasterFid?: number;
-}): Promise<{ welcome: string; alerts: string[] }> {
+}): Promise<{ welcome: string; alerts: string[]; farcasterNotificationsEnabled?: boolean }> {
   const response = await fetch(`${API_URL}/api/users/farcaster-username`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -236,12 +238,12 @@ export async function setFarcasterUsername(input: {
   if (!response.ok) {
     throw new Error("Unable to set Farcaster username");
   }
-  return response.json() as Promise<{ welcome: string; alerts: string[] }>;
+  return response.json() as Promise<{ welcome: string; alerts: string[]; farcasterNotificationsEnabled?: boolean }>;
 }
 
 export async function sendPositionAlert(input: {
   walletAddress: string;
-  type: "withdrawal_requested" | "withdrawal_completed" | "transaction_failed";
+  type: "deposit_confirmed" | "staking_started" | "withdrawal_requested" | "withdrawal_completed" | "transaction_failed";
   title: string;
   body: string;
   transactionHash?: string;
@@ -253,4 +255,24 @@ export async function sendPositionAlert(input: {
   });
   if (!response.ok) return { delivered: false, reason: "alert endpoint failed" };
   return response.json() as Promise<{ delivered: boolean; reason?: string }>;
+}
+
+export async function saveFarcasterClientSubscription(input: {
+  walletAddress: string;
+  fid: number;
+  username?: string;
+  notificationDetails: {
+    url: string;
+    token: string;
+  };
+}): Promise<{ ok: boolean; farcasterNotificationsEnabled?: boolean }> {
+  const response = await fetch(`${API_URL}/api/alerts/farcaster/client-subscription`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    throw new Error("Unable to enable Farcaster inbox alerts.");
+  }
+  return response.json() as Promise<{ ok: boolean; farcasterNotificationsEnabled?: boolean }>;
 }

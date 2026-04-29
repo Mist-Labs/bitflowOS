@@ -60,7 +60,18 @@ const EkuboQuoteSchema = z.object({
 
 const FarcasterWebhookSchema = z.object({
   fid: z.number().int().positive().optional(),
-  event: z.string(),
+  event: z.union([
+    z.string(),
+    z.object({
+      event: z.string(),
+      username: z.string().optional(),
+      notificationDetails: z.object({
+        url: z.string().url(),
+        token: z.string().min(8)
+      }).optional(),
+      walletAddress: z.string().optional()
+    }).passthrough()
+  ]),
   username: z.string().optional(),
   notificationDetails: z.object({
     url: z.string().url(),
@@ -125,6 +136,16 @@ const FarcasterUsernameSchema = z.object({
   walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),
   farcasterUsername: z.string(),
   farcasterFid: z.number().int().positive().optional()
+});
+
+const FarcasterClientSubscriptionSchema = z.object({
+  walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),
+  fid: z.number().int().positive(),
+  username: z.string().optional(),
+  notificationDetails: z.object({
+    url: z.string().url(),
+    token: z.string().min(8)
+  })
 });
 
 export async function registerRoutes(app: FastifyInstance, config: AppConfig): Promise<void> {
@@ -280,7 +301,10 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
     if (!profile) {
       return reply.status(404).send({ error: "not_found", message: "user profile not found" });
     }
-    return profile;
+    return {
+      ...profile,
+      farcasterNotificationsEnabled: await alerts.hasEnabledSubscriptionForWallet(walletAddress)
+    };
   });
 
   app.post("/api/users/farcaster-username", async request => {
@@ -297,41 +321,68 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
         "position_health_warning",
         "transaction_failed"
       ],
-      welcome: `Welcome alert prepared for @${input.farcasterUsername.replace(/^@/, "")}. Mini App notification delivery requires the Farcaster notification token webhook.`
+      farcasterNotificationsEnabled: await alerts.hasEnabledSubscriptionForWallet(input.walletAddress),
+      welcome: `Farcaster username saved for @${input.farcasterUsername.replace(/^@/, "")}. To receive inbox alerts, add the BitflowOS Mini App and enable notifications.`
+    };
+  });
+
+  app.post("/api/alerts/farcaster/client-subscription", async request => {
+    const input = FarcasterClientSubscriptionSchema.parse(request.body);
+    const profile = await profiles.get(input.walletAddress);
+    await alerts.upsertSubscription({
+      fid: input.fid,
+      url: input.notificationDetails.url,
+      token: input.notificationDetails.token,
+      walletAddress: input.walletAddress,
+      enabled: true
+    });
+    await profiles.setFarcasterUsername({
+      walletAddress: input.walletAddress,
+      farcasterUsername: profile?.farcasterUsername ?? input.username ?? String(input.fid),
+      farcasterFid: input.fid
+    });
+    return {
+      ok: true,
+      farcasterNotificationsEnabled: await alerts.hasEnabledSubscriptionForWallet(input.walletAddress)
     };
   });
 
   app.post("/api/alerts/farcaster/webhook", async request => {
-    const event = FarcasterWebhookSchema.parse(request.body);
-    if (event.event === "miniapp_removed" && event.fid) {
+    const payload = FarcasterWebhookSchema.parse(request.body);
+    const eventName = typeof payload.event === "string" ? payload.event : payload.event.event;
+    const notificationDetails = typeof payload.event === "string" ? payload.notificationDetails : payload.event.notificationDetails;
+    const walletAddress = typeof payload.event === "string" ? payload.walletAddress : payload.event.walletAddress ?? payload.walletAddress;
+    const username = typeof payload.event === "string" ? payload.username : payload.event.username ?? payload.username;
+
+    if ((eventName === "miniapp_removed" || eventName === "notifications_disabled") && payload.fid) {
       await alerts.upsertSubscription({
-        fid: event.fid,
-        url: event.notificationDetails?.url ?? "https://api.farcaster.xyz/v1/frame-notifications",
-        token: event.notificationDetails?.token ?? "disabled",
-        walletAddress: event.walletAddress,
+        fid: payload.fid,
+        url: notificationDetails?.url ?? "https://api.farcaster.xyz/v1/frame-notifications",
+        token: notificationDetails?.token ?? "disabled",
+        walletAddress,
         enabled: false
       });
       return { ok: true };
     }
 
-    if (event.notificationDetails && event.fid) {
-      const profile = event.walletAddress
-        ? await profiles.get(event.walletAddress)
-        : event.username
-          ? await profiles.getByUsername(event.username)
-          : undefined;
+    if (notificationDetails && payload.fid) {
+      const profile = walletAddress
+        ? await profiles.get(walletAddress)
+        : username
+          ? await profiles.getByUsername(username)
+          : await profiles.getByFid(payload.fid);
       await alerts.upsertSubscription({
-        fid: event.fid,
-        url: event.notificationDetails.url,
-        token: event.notificationDetails.token,
-        walletAddress: event.walletAddress ?? profile?.walletAddress,
+        fid: payload.fid,
+        url: notificationDetails.url,
+        token: notificationDetails.token,
+        walletAddress: walletAddress ?? profile?.walletAddress,
         enabled: true
       });
       if (profile?.walletAddress) {
         await profiles.setFarcasterUsername({
           walletAddress: profile.walletAddress,
-          farcasterUsername: profile.farcasterUsername ?? event.username ?? String(event.fid),
-          farcasterFid: event.fid
+          farcasterUsername: profile.farcasterUsername ?? username ?? String(payload.fid),
+          farcasterFid: payload.fid
         });
       }
     }
@@ -354,7 +405,7 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
   app.post("/api/alerts/position-event", async request => {
     const input = z.object({
       walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),
-      type: z.enum(["withdrawal_requested", "withdrawal_completed", "transaction_failed"]),
+      type: z.enum(["deposit_confirmed", "staking_started", "withdrawal_requested", "withdrawal_completed", "transaction_failed"]),
       title: z.string(),
       body: z.string(),
       transactionHash: z.string().optional()

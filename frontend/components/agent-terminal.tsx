@@ -1,9 +1,10 @@
 "use client";
 
-import { createRecommendation, deployCapital, getUserProfile, getVaultState, setFarcasterUsername } from "@/lib/api";
+import { createRecommendation, deployCapital, getUserProfile, getVaultState, saveFarcasterClientSubscription, setFarcasterUsername } from "@/lib/api";
 import type { AllocationRecommendation, VaultState } from "@/lib/types";
 import { Bot, SendHorizonal, TerminalSquare } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type WalletState = {
   chain: "starknet" | "bitcoin" | "privy" | "cartridge";
@@ -71,7 +72,7 @@ export function AgentTerminal() {
       setStep("watching");
       setMessages(current => [
         ...current,
-        `Deposit submitted: ${detail.tokenSymbol ?? "BTC"} ${detail.amountBaseUnits ?? ""}${detail.transactionHash ? ` (${short(detail.transactionHash)})` : ""}.`,
+        `Deposit submitted: ${detail.tokenSymbol ?? "BTC"} ${detail.amountBaseUnits ?? ""}${detail.transactionHash ? ` ${detail.transactionHash}` : ""}.`,
         "Watching the vault for minted yBTC shares. I will continue automatically once the deposit indexes."
       ]);
       window.dispatchEvent(new CustomEvent("bitflowos:allocation-progress", {
@@ -213,6 +214,10 @@ export function AgentTerminal() {
     }
 
     if (step === "farcaster") {
+      if (/^(enable|notify|notifications|add)$/i.test(value)) {
+        await requestFarcasterNotifications();
+        return;
+      }
       if (value.toLowerCase() === "deposited") {
         setStep("watching");
         pushOnce("That looks like a deposit status, not a Farcaster handle. I am checking vault state instead.");
@@ -226,8 +231,17 @@ export function AgentTerminal() {
       setBusy(true);
       try {
         const result = await setFarcasterUsername({ walletAddress, farcasterUsername: value });
-        setMessages(current => [...current, result.welcome, "Farcaster alerts are attached to this wallet. You are set."]);
-        setStep("done");
+        if (result.farcasterNotificationsEnabled) {
+          setMessages(current => [...current, result.welcome, "Farcaster inbox alerts are live for this wallet. You are set."]);
+          setStep("done");
+        } else {
+          setMessages(current => [
+            ...current,
+            result.welcome,
+            "Type `enable` to add BitflowOS in Farcaster and turn on inbox alerts."
+          ]);
+          setStep("farcaster");
+        }
       } catch (error) {
         pushOnce((error as Error).message);
       } finally {
@@ -250,9 +264,20 @@ export function AgentTerminal() {
 
     try {
       const username = await getFarcasterUsername();
-      if (username) {
-        setMessages(current => [...current, `Farcaster is set for @${username}. You are set.`]);
+      const profile = await getFarcasterProfile();
+      if (profile?.farcasterUsername && profile.farcasterNotificationsEnabled) {
+        setMessages(current => [...current, `Farcaster inbox alerts are live for @${profile.farcasterUsername}. You are set.`]);
         setStep("done");
+        return;
+      }
+      if (profile?.farcasterUsername || username) {
+        const handle = profile?.farcasterUsername ?? username;
+        setStep("farcaster");
+        setMessages(current => [
+          ...current,
+          `Farcaster username @${handle} is saved, but inbox alerts are not live yet.`,
+          "Type `enable` to add BitflowOS in Farcaster and enable notifications."
+        ]);
         return;
       }
 
@@ -273,9 +298,9 @@ export function AgentTerminal() {
   }
 
   async function checkFarcasterReady(doneMessage: string) {
-    const username = await getFarcasterUsername();
-    if (username) {
-      setMessages(current => [...current, doneMessage.replace("{username}", username)]);
+    const profile = await getFarcasterProfile();
+    if (profile?.farcasterUsername && profile.farcasterNotificationsEnabled) {
+      setMessages(current => [...current, doneMessage.replace("{username}", profile.farcasterUsername ?? "")]);
       setStep("done");
       return;
     }
@@ -370,7 +395,7 @@ export function AgentTerminal() {
       } else {
         setMessages(current => [
           ...current,
-          `Router rebalance submitted: ${short(result.transactionHash ?? "")}.`,
+          `Router rebalance submitted: ${result.transactionHash ?? "transaction hash pending"}.`,
           `Attestation ${short(result.attestationHash ?? "")} accepted for ${result.weights.map(item => `${item.label} ${Math.round(item.targetBps / 100)}%`).join(", ")}.`
         ]);
       }
@@ -388,12 +413,50 @@ export function AgentTerminal() {
   }
 
   async function getFarcasterUsername() {
-    if (!walletAddress) return "";
+    return (await getFarcasterProfile())?.farcasterUsername ?? "";
+  }
+
+  async function getFarcasterProfile(): Promise<Awaited<ReturnType<typeof getUserProfile>> | undefined> {
+    if (!walletAddress) return undefined;
     try {
-      const profile = await getUserProfile(walletAddress);
-      return profile.farcasterUsername ?? "";
+      return await getUserProfile(walletAddress);
     } catch {
-      return "";
+      return undefined;
+    }
+  }
+
+  async function requestFarcasterNotifications() {
+    if (!walletAddress) {
+      pushOnce("Connect the Starknet wallet first so I can attach Farcaster alerts to the correct account.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const { sdk } = await import("@farcaster/miniapp-sdk");
+      const inMiniApp = await sdk.isInMiniApp();
+      if (!inMiniApp) {
+        pushOnce("Open BitflowOS inside Farcaster, then use `enable` here to turn on inbox alerts.");
+        return;
+      }
+      const context = await sdk.context;
+      const response = await sdk.actions.addMiniApp();
+      if (!response.notificationDetails) {
+        pushOnce("BitflowOS was added, but Farcaster did not return notification permissions. Enable notifications for BitflowOS in Farcaster, then try again.");
+        return;
+      }
+      await saveFarcasterClientSubscription({
+        walletAddress,
+        fid: context.user.fid,
+        username: context.user.username,
+        notificationDetails: response.notificationDetails
+      });
+      setMessages(current => [...current, `Farcaster inbox alerts are live for @${context.user.username ?? context.user.fid}. You are set.`]);
+      setStep("done");
+    } catch (error) {
+      pushOnce(`Farcaster notifications are not enabled yet: ${(error as Error).message}`);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -418,7 +481,7 @@ export function AgentTerminal() {
         {messages.map((message, index) => (
           <p key={`${message}-${index}`}>
             {message.startsWith(">") ? null : <Bot size={13} />}
-            <span>{message}</span>
+            <span>{renderAgentMessage(message)}</span>
           </p>
         ))}
       </div>
@@ -453,6 +516,25 @@ function formatRecommendation(recommendation: AllocationRecommendation): string 
 function short(address: string) {
   if (address.length <= 14) return address;
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function renderAgentMessage(message: string): ReactNode {
+  const hashPattern = /(0x[0-9a-fA-F]{16,})/g;
+  const parts = message.split(hashPattern);
+  return parts.map((part, index) => {
+    if (!/^0x[0-9a-fA-F]{16,}$/.test(part)) return part;
+    return (
+      <a
+        key={`${part}-${index}`}
+        className="agent-tx-link"
+        href={`https://sepolia.voyager.online/tx/${part}`}
+        target="_blank"
+        rel="noreferrer"
+      >
+        {short(part)}
+      </a>
+    );
+  });
 }
 
 function parsePositionAction(value: string): "claim" | "withdraw" | null {

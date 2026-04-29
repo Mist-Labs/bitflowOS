@@ -120,40 +120,13 @@ export class AlertService {
     }
 
     const targetUrl = input.targetUrl ?? this.config.farcasterAppUrl;
-    if (this.config.neynarApiKey) {
-      const response = await fetch("https://api.neynar.com/v2/farcaster/frame/notifications/", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": this.config.neynarApiKey
-        },
-        body: JSON.stringify({
-          notification: {
-            title: input.title,
-            body: input.body,
-            target_url: targetUrl,
-            uuid: randomUUID()
-          },
-          target_fids: [subscription.fid]
-        })
-      });
-      if (!response.ok) {
-        const result = { delivered: false, reason: `Neynar returned ${response.status}` };
-        await this.recordEvent({ ...input, fid: subscription.fid, walletAddress: input.walletAddress ?? subscription.walletAddress }, result);
-        return result;
-      }
-      const result = { delivered: true };
-      await this.recordEvent({ ...input, fid: subscription.fid, walletAddress: input.walletAddress ?? subscription.walletAddress }, result);
-      return result;
-    }
-
     const response = await fetch(subscription.url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         notificationId: randomUUID(),
-        title: input.title,
-        body: input.body,
+        title: truncate(input.title, 32),
+        body: truncate(input.body, 128),
         targetUrl,
         tokens: [subscription.token]
       })
@@ -167,6 +140,10 @@ export class AlertService {
     const result = { delivered: true };
     await this.recordEvent({ ...input, fid: subscription.fid, walletAddress: input.walletAddress ?? subscription.walletAddress }, result);
     return result;
+  }
+
+  async hasEnabledSubscriptionForWallet(walletAddress: string): Promise<boolean> {
+    return Boolean(await this.getSubscriptionByWallet(walletAddress));
   }
 
   private async getSubscription(fid: number): Promise<FarcasterSubscription | undefined> {
@@ -246,6 +223,10 @@ export class AlertService {
 
 function normalizeWallet(value?: string): string | undefined {
   return value?.toLowerCase();
+}
+
+function truncate(value: string, max: number) {
+  return value.length > max ? `${value.slice(0, Math.max(0, max - 3))}...` : value;
 }
 
 function rowToSubscription(row: any): FarcasterSubscription {

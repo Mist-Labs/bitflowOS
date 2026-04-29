@@ -1571,6 +1571,18 @@ input {
   overflow-wrap: anywhere;
 }
 
+.agent-tx-link {
+  color: var(--amber);
+  font-family: var(--mono);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.agent-tx-link:hover {
+  color: #ffd36f;
+}
+
 .agent-setup {
   background: rgba(245, 184, 75, 0.08);
   border: 1px solid rgba(245, 184, 75, 0.22);
