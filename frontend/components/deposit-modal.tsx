@@ -144,15 +144,19 @@ export function DepositModal({ tokens, vaultState }: { tokens: TokenConfig[]; va
         return;
       }
 
+      const amountBaseUnits = decimalToBaseUnits(amount || "0", tokenDecimals);
+      if (BigInt(amountBaseUnits) > BigInt(walletBalance || "0")) {
+        throw new Error(`Deposit amount exceeds your ${asset} wallet balance.`);
+      }
       const calls = await buildDepositCalls({
         tokenSymbol: asset,
-        amountBaseUnits: decimalToBaseUnits(amount || "0", tokenDecimals)
+        amountBaseUnits
       });
       const execution = await executeStarknetMulticallViaStarkZap(calls.calls);
       const detail = {
         walletAddress,
         tokenSymbol: asset,
-        amountBaseUnits: decimalToBaseUnits(amount || "0", tokenDecimals),
+        amountBaseUnits,
         transactionHash: execution.hash,
         route: execution.route,
         callCount: execution.callCount

@@ -216,9 +216,17 @@ function parseTokenConfig(raw: string, network: SupportedNetwork): Record<string
   return Object.fromEntries(
     Object.entries(parsed).map(([key, token]) => [key.toUpperCase(), {
       ...token,
-      symbol: (token.symbol ?? key).toUpperCase()
+      symbol: (token.symbol ?? key).toUpperCase(),
+      decimals: normalizeTokenDecimals({ ...token, symbol: token.symbol ?? key }, network)
     }])
   );
+}
+
+function normalizeTokenDecimals(token: Pick<TokenConfig, "symbol" | "decimals" | "kind">, network: SupportedNetwork): number {
+  const symbol = token.symbol.toUpperCase();
+  const isDemoIntegerToken = network !== "mainnet"
+    && (token.kind === "mock" || token.kind === "ekubo_controlled_test" || symbol.endsWith("_TEST"));
+  return isDemoIntegerToken ? 0 : token.decimals;
 }
 
 function parseStrategyRoutes(raw: string): Record<string, StrategyRouteConfig> {
