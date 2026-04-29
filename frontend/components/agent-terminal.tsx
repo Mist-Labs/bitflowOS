@@ -297,12 +297,12 @@ export function AgentTerminal() {
       const username = await getFarcasterUsername();
       const profile = await getFarcasterProfile();
       if (profile?.emailAlertsEnabled && profile.emailAddress) {
-        setMessages(current => [...current, `Email alerts are live for ${profile.emailAddress}. You are set.`]);
+        pushOnce(`Email alerts are live for ${profile.emailAddress}. You are set.`);
         setStep("done");
         return;
       }
       if (profile?.farcasterUsername && profile.farcasterNotificationsEnabled) {
-        setMessages(current => [...current, `Farcaster inbox alerts are live for @${profile.farcasterUsername}. You are set.`]);
+        pushOnce(`Farcaster inbox alerts are live for @${profile.farcasterUsername}. You are set.`);
         setStep("done");
         return;
       }
@@ -337,12 +337,12 @@ export function AgentTerminal() {
   async function checkFarcasterReady(doneMessage: string) {
     const profile = await getFarcasterProfile();
     if (profile?.emailAlertsEnabled && profile.emailAddress) {
-      setMessages(current => [...current, `Email alerts are live for ${profile.emailAddress}. You are set.`]);
+      pushOnce(`Email alerts are live for ${profile.emailAddress}. You are set.`);
       setStep("done");
       return;
     }
     if (profile?.farcasterUsername && profile.farcasterNotificationsEnabled) {
-      setMessages(current => [...current, doneMessage.replace("{username}", profile.farcasterUsername ?? "")]);
+      pushOnce(doneMessage.replace("{username}", profile.farcasterUsername ?? ""));
       setStep("done");
       return;
     }

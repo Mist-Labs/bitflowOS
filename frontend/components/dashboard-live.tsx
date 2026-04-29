@@ -413,6 +413,7 @@ function compactUnits(value: bigint, decimals: number) {
   if (value > 0n && value < oneSatoshi) return "<0.00000001";
   const whole = value / divisor;
   const fraction = value % divisor;
+  if (whole >= 10000n) return compactWhole(whole);
   if (whole > 0n) {
     const frac = fraction.toString().padStart(decimals, "0").slice(0, 4).replace(/0+$/, "");
     return frac ? `${whole}.${frac}` : whole.toString();
@@ -421,6 +422,22 @@ function compactUnits(value: bigint, decimals: number) {
   const firstNonZero = raw.search(/[1-9]/);
   if (firstNonZero === -1) return "0";
   return `0.${raw.slice(0, Math.min(decimals, firstNonZero + 4)).replace(/0+$/, "")}`;
+}
+
+function compactWhole(value: bigint) {
+  const units = [
+    { suffix: "B", size: 1_000_000_000n },
+    { suffix: "M", size: 1_000_000n },
+    { suffix: "K", size: 1_000n }
+  ];
+  const unit = units.find(item => value >= item.size);
+  if (!unit) return value.toString();
+  const scaledTimesTen = value * 10n / unit.size;
+  const whole = scaledTimesTen / 10n;
+  const decimal = scaledTimesTen % 10n;
+  return decimal > 0n && whole < 100n
+    ? `${whole}.${decimal}${unit.suffix}`
+    : `${whole}${unit.suffix}`;
 }
 
 function toBigInt(value?: string) {
