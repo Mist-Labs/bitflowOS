@@ -51,6 +51,7 @@ export function DepositModal({ tokens, vaultState }: { tokens: TokenConfig[]; va
   const selectedToken = tokens.find(item => item.symbol.toUpperCase() === normalizedAsset);
   const tokenDecimals = liveAsset?.decimals ?? selectedToken?.decimals ?? 18;
   const walletBalance = liveAsset?.userWalletBalance ?? "0";
+  const displayWalletBalance = formatTokenUnits(walletBalance, tokenDecimals);
   const walletAddress = wallet?.address ?? (typeof window === "undefined" ? "" : readWalletAddress());
   const tokenAssets = tokens.map(item => item.symbol);
 
@@ -124,6 +125,22 @@ export function DepositModal({ tokens, vaultState }: { tokens: TokenConfig[]; va
     setResult("");
   }
 
+  function reviewDeposit() {
+    try {
+      if (source !== "native" && normalizedAsset !== "BTC") {
+        const amountBaseUnits = decimalToBaseUnits(amount || "0", tokenDecimals);
+        if (BigInt(amountBaseUnits) > BigInt(walletBalance || "0")) {
+          throw new Error(`Deposit amount exceeds your ${asset} wallet balance.`);
+        }
+        setAmount(normalizeAmountInput(amount, tokenDecimals));
+      }
+      setResult("");
+      setStep(2);
+    } catch (error) {
+      setResult((error as Error).message);
+    }
+  }
+
   async function confirmAndSign() {
     setStep(3);
     setBusy(true);
@@ -144,7 +161,8 @@ export function DepositModal({ tokens, vaultState }: { tokens: TokenConfig[]; va
         return;
       }
 
-      const amountBaseUnits = decimalToBaseUnits(amount || "0", tokenDecimals);
+      const normalizedAmount = normalizeAmountInput(amount || "0", tokenDecimals);
+      const amountBaseUnits = decimalToBaseUnits(normalizedAmount, tokenDecimals);
       if (BigInt(amountBaseUnits) > BigInt(walletBalance || "0")) {
         throw new Error(`Deposit amount exceeds your ${asset} wallet balance.`);
       }
@@ -278,12 +296,19 @@ export function DepositModal({ tokens, vaultState }: { tokens: TokenConfig[]; va
                 <div className="m-f">
                   <div className="m-flabel">Amount</div>
                   <div className="m-amt">
-                    <input type="number" value={amount} placeholder="0.000" onChange={event => setAmount(event.target.value)} />
+                    <input
+                      type="number"
+                      value={amount}
+                      placeholder={tokenDecimals === 0 ? "0" : "0.000"}
+                      min="0"
+                      step={tokenDecimals === 0 ? "1" : "any"}
+                      onChange={event => setAmount(event.target.value)}
+                    />
                     <div className="m-amt-unit">{asset}</div>
                   </div>
                   <div className="m-hint">
-                    <span>Balance: {walletBalance} {asset}</span>
-                    <button className="ml" onClick={() => setAmount(walletBalance)} type="button">USE MAX</button>
+                    <span>Balance: {displayWalletBalance} {asset}</span>
+                    <button className="ml" onClick={() => setAmount(displayWalletBalance)} type="button">USE MAX</button>
                   </div>
                 </div>
 
@@ -301,7 +326,8 @@ export function DepositModal({ tokens, vaultState }: { tokens: TokenConfig[]; va
                   <div className="mri-row"><span className="mri-l">TIME</span><span className="mri-r">~15 seconds</span></div>
                 </div>
 
-                <button className="m-cta" onClick={() => setStep(2)} type="button">Review Deposit -&gt;</button>
+                {result ? <div className="sign-result">{result}</div> : null}
+                <button className="m-cta" onClick={reviewDeposit} type="button">Review Deposit -&gt;</button>
               </div>
             ) : null}
 
@@ -374,7 +400,7 @@ function readWalletAddress() {
 }
 
 function decimalToBaseUnits(value: string, decimals: number) {
-  const trimmed = value.trim();
+  const trimmed = normalizeAmountInput(value, decimals);
   if (!/^\d+(\.\d+)?$/.test(trimmed)) {
     throw new Error("Enter a valid deposit amount.");
   }
@@ -387,6 +413,32 @@ function decimalToBaseUnits(value: string, decimals: number) {
     throw new Error("Enter an amount greater than zero.");
   }
   return base;
+}
+
+function normalizeAmountInput(value: string, decimals: number) {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  if (!trimmed.includes(".")) return trimmed;
+  const [whole, fraction = ""] = trimmed.split(".");
+  if (fraction.length <= decimals) return trimmed;
+  if (/^0+$/.test(fraction.slice(decimals))) {
+    const kept = fraction.slice(0, decimals).replace(/0+$/, "");
+    return kept ? `${whole}.${kept}` : whole;
+  }
+  return trimmed;
+}
+
+function formatTokenUnits(value: string, decimals: number) {
+  try {
+    const raw = BigInt(value || "0");
+    if (decimals <= 0) return raw.toString();
+    const divisor = 10n ** BigInt(decimals);
+    const whole = raw / divisor;
+    const fraction = (raw % divisor).toString().padStart(decimals, "0").replace(/0+$/, "");
+    return fraction ? `${whole}.${fraction}` : whole.toString();
+  } catch {
+    return "0";
+  }
 }
 
 function readWalletSnapshot(): WalletSnapshot {

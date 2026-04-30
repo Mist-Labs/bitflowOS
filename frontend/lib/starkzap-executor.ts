@@ -36,12 +36,18 @@ export async function executeStarknetMulticallViaStarkZap(calls: StarknetCall[])
     throw new Error("StarkZap config endpoint did not return the StarkZap execution surface.");
   }
 
-  const wallet = getConnectedStarknetWallet();
-  if (!wallet?.account?.execute) {
+  let wallet = getConnectedStarknetWallet();
+  if (!wallet) {
     throw new Error("StarkZap could not find a connected Starknet wallet execution account.");
   }
 
-  await wallet.request?.({ type: "wallet_requestAccounts" }).catch(() => undefined);
+  await enableWallet(wallet);
+  wallet = getConnectedStarknetWallet();
+  if (!wallet?.account?.execute) {
+    throw new Error("Wallet connection is active, but no Starknet execution account is available. Unlock the wallet, select the connected Starknet account, and try again.");
+  }
+  assertWalletMatchesConnection(wallet);
+
   const result = await wallet.account.execute(calls);
   const hash = result.transaction_hash ?? result.transactionHash;
   if (!hash) {
@@ -54,6 +60,24 @@ export async function executeStarknetMulticallViaStarkZap(calls: StarknetCall[])
     network: config.network,
     callCount: calls.length
   };
+}
+
+async function enableWallet(wallet: StarknetWalletApi) {
+  if (wallet.request) {
+    await wallet.request({ type: "wallet_requestAccounts" });
+    return;
+  }
+  await wallet.enable?.();
+}
+
+function assertWalletMatchesConnection(wallet: StarknetWalletApi) {
+  const connected = readWalletSnapshot();
+  if (!connected?.address) return;
+  const activeAddress = wallet.selectedAddress ?? wallet.account?.address;
+  if (!activeAddress) return;
+  if (normalize(activeAddress) !== normalize(connected.address)) {
+    throw new Error("The active Starknet wallet account does not match the connected BitflowOS account. Switch accounts in your wallet and try again.");
+  }
 }
 
 function getConnectedStarknetWallet(): StarknetWalletApi | undefined {
