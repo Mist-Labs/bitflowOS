@@ -55,6 +55,14 @@ export interface BridgeIntentRecord {
   error?: string;
 }
 
+export interface FaucetClaimRecord {
+  walletAddress: string;
+  tokenSymbol: string;
+  amount: string;
+  transactionHash: string;
+  claimedAt: string;
+}
+
 export interface FarcasterSubscription {
   fid: number;
   url: string;

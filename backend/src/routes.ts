@@ -12,6 +12,7 @@ import { ZeroGVerifierService } from "./services/zeroGVerifier.js";
 import { UserProfileService } from "./services/userProfiles.js";
 import { PrivyStarkZapService } from "./services/privyStarkZap.js";
 import { CapitalDeploymentService } from "./services/capitalDeployment.js";
+import { FaucetService } from "./services/faucet.js";
 
 const BtcBridgeQuoteSchema = z.object({
   amountSats: z.string().regex(/^[1-9]\d*$/),
@@ -154,6 +155,10 @@ const EmailAlertsSchema = z.object({
   enabled: z.boolean().optional().default(true)
 });
 
+const FaucetMintSchema = z.object({
+  walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/)
+});
+
 export async function registerRoutes(app: FastifyInstance, config: AppConfig): Promise<void> {
   const bridge = new AtomiqBridgeService(config);
   const vault = new VaultService(config);
@@ -166,6 +171,7 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
   const profiles = new UserProfileService(config);
   const privyStarkZap = new PrivyStarkZapService(config);
   const capitalDeployment = new CapitalDeploymentService(config);
+  const faucet = new FaucetService(config);
 
   app.get("/health", async () => ({
     ok: true,
@@ -297,6 +303,11 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
     const input = ZeroGVerifySchema.parse(request.body);
     if (input.chatId) return zeroG.verifyResponse(input);
     return zeroG.verifyProvider(input.providerAddress);
+  });
+
+  app.post("/api/faucet/sbtc-test", async request => {
+    const input = FaucetMintSchema.parse(request.body);
+    return faucet.mintTestToken(input);
   });
 
   app.get("/api/users/:walletAddress", async (request, reply) => {

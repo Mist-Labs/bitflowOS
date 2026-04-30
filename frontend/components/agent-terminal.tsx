@@ -1,6 +1,6 @@
 "use client";
 
-import { createRecommendation, deployCapital, getUserProfile, getVaultState, saveFarcasterClientSubscription, setEmailAlerts, setFarcasterUsername } from "@/lib/api";
+import { createRecommendation, deployCapital, getUserProfile, getVaultState, mintTestToken, saveFarcasterClientSubscription, setEmailAlerts, setFarcasterUsername } from "@/lib/api";
 import type { AllocationRecommendation, VaultState } from "@/lib/types";
 import { Bot, SendHorizonal, TerminalSquare } from "lucide-react";
 import type { FormEvent, ReactNode } from "react";
@@ -160,7 +160,7 @@ export function AgentTerminal() {
       if (!hasWalletBalance) {
         setStep("deposit");
         setDepositPrompted(true);
-        pushOnce("I do not see BTC wrapper balance or yBTC shares yet. Fund this Starknet wallet with a supported BTC wrapper, then open Deposit BTC.");
+        pushOnce("I do not see BTC wrapper balance or yBTC shares yet. If you need a test token, type `yes` and I will mint 1 SBTC_TEST to this wallet. Limit: 1 per address every 24 hours.");
         return;
       }
 
@@ -212,6 +212,11 @@ export function AgentTerminal() {
       return;
     }
 
+    if (parseFaucetIntent(value)) {
+      await requestTestToken();
+      return;
+    }
+
     const alertUpdateIntent = parseAlertUpdateIntent(value);
     if (alertUpdateIntent) {
       if (!walletAddress || isBitcoinWallet) {
@@ -231,6 +236,10 @@ export function AgentTerminal() {
     }
 
     if (step === "deposit") {
+      if (/^(yes|y|sure|ok)$/i.test(value)) {
+        await requestTestToken();
+        return;
+      }
       if (value.toLowerCase() === "deposited") {
         setStep("watching");
         pushOnce("Deposit noted. I am checking live vault state now.");
@@ -362,6 +371,29 @@ export function AgentTerminal() {
       setMessages(current => [...current, result.welcome, "Email alerts are attached to this wallet. You are set."]);
       setStep("done");
       clearAgentSession();
+    } catch (error) {
+      pushOnce((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function requestTestToken() {
+    if (!walletAddress || isBitcoinWallet) {
+      pushOnce("Connect a Starknet wallet first so I know where to mint the test token.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const result = await mintTestToken({ walletAddress });
+      setMessages(current => [
+        ...current,
+        `Minted ${result.amount} ${result.tokenSymbol} to ${short(walletAddress)}: ${result.transactionHash}.`,
+        "Open Deposit BTC and deposit the test token when it lands."
+      ]);
+      window.dispatchEvent(new CustomEvent("bitflowos:vault-refresh"));
+      setStep("deposit");
     } catch (error) {
       pushOnce((error as Error).message);
     } finally {
@@ -698,6 +730,10 @@ function parsePositionAction(value: string): "claim" | "withdraw" | null {
   if (/\b(claim|harvest|rewards?)\b/.test(normalized)) return "claim";
   if (/\b(withdraw|exit|redeem|unstake)\b/.test(normalized)) return "withdraw";
   return null;
+}
+
+function parseFaucetIntent(value: string): boolean {
+  return /\b(faucet|mint|test token|sbtc_test|sbtc test)\b/i.test(value);
 }
 
 function parseAlertUpdateIntent(value: string): AlertUpdateMode {

@@ -196,6 +196,27 @@ export async function deployCapital(input: {
   return response.json();
 }
 
+export async function mintTestToken(input: {
+  walletAddress: string;
+}): Promise<{
+  tokenSymbol: string;
+  amount: string;
+  walletAddress: string;
+  transactionHash: string;
+  nextClaimAt: string;
+}> {
+  const response = await fetch(`${API_URL}/api/faucet/sbtc-test`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input)
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null) as { message?: string } | null;
+    throw new Error(detail?.message ?? "Unable to mint the test token.");
+  }
+  return response.json();
+}
+
 export async function getPrivyStarknetWallet(input: {
   userId: string;
 }): Promise<{

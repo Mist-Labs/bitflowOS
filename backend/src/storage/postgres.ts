@@ -28,7 +28,7 @@ export async function runMigrations(databaseUrl: string): Promise<void> {
     )
   `);
 
-  const migrations = ["001_app_storage.sql", "002_email_alerts.sql"];
+  const migrations = ["001_app_storage.sql", "002_email_alerts.sql", "003_test_token_faucet.sql"];
   for (const version of migrations) {
     const applied = await pool.query("SELECT 1 FROM schema_migrations WHERE version = $1", [version]);
     if (applied.rowCount) continue;
