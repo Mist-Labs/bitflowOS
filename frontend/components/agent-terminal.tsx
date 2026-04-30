@@ -389,7 +389,7 @@ export function AgentTerminal() {
       const result = await mintTestToken({ walletAddress });
       setMessages(current => [
         ...current,
-        `Minted ${result.amount} ${result.tokenSymbol} to ${short(walletAddress)}: ${result.transactionHash}.`,
+        `Test token mint completed: ${result.amount} ${result.tokenSymbol} sent to ${short(walletAddress)}. Transaction: ${result.transactionHash}.`,
         "Open Deposit BTC and deposit the test token when it lands."
       ]);
       window.dispatchEvent(new CustomEvent("bitflowos:vault-refresh"));
