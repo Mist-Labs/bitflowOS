@@ -20,79 +20,99 @@ const BtcBridgeQuoteSchema = z.object({
   outputToken: z.string().optional(),
   source: z.enum(["BTC", "BTCLN"]).optional(),
   userId: z.string().optional(),
-  farcasterFid: z.number().int().positive().optional()
+  farcasterFid: z.number().int().positive().optional(),
 });
 
 const DepositCallsSchema = z.object({
   tokenSymbol: z.string(),
-  amountBaseUnits: z.string().regex(/^[1-9]\d*$/)
+  amountBaseUnits: z.string().regex(/^[1-9]\d*$/),
 });
 
 const WithdrawCallSchema = z.object({
   tokenSymbol: z.string(),
-  sharesBaseUnits: z.string().regex(/^[1-9]\d*$/)
+  sharesBaseUnits: z.string().regex(/^[1-9]\d*$/),
 });
 
 const RouterReadCallsSchema = z.object({
   tokenSymbol: z.string(),
-  strategyId: z.string().regex(/^0x[0-9a-fA-F]+$/)
+  strategyId: z.string().regex(/^0x[0-9a-fA-F]+$/),
 });
 
 const RouterHarvestCallSchema = RouterReadCallsSchema;
 
 const PrivyStarknetWalletSchema = z.object({
-  userId: z.string().min(1)
+  userId: z.string().min(1),
 });
 
 const PrivyRawSignSchema = z.object({
   walletId: z.string().min(1),
-  hash: z.string().regex(/^0x[0-9a-fA-F]+$/)
+  hash: z.string().regex(/^0x[0-9a-fA-F]+$/),
 });
 
 const VaultStateQuerySchema = z.object({
-  userAddress: z.string().regex(/^0x[0-9a-fA-F]+$/).optional()
+  userAddress: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]+$/)
+    .optional(),
 });
 
 const EkuboQuoteSchema = z.object({
   routeKey: z.string().optional(),
   tokenSymbol: z.string().optional(),
-  amountBaseUnits: z.string().regex(/^[1-9]\d*$/).optional()
+  amountBaseUnits: z
+    .string()
+    .regex(/^[1-9]\d*$/)
+    .optional(),
 });
 
-const FarcasterWebhookSchema = z.object({
-  fid: z.number().int().positive().optional(),
-  event: z.union([
-    z.string(),
-    z.object({
-      event: z.string(),
-      username: z.string().optional(),
-      notificationDetails: z.object({
+const FarcasterWebhookSchema = z
+  .object({
+    fid: z.number().int().positive().optional(),
+    event: z.union([
+      z.string(),
+      z
+        .object({
+          event: z.string(),
+          username: z.string().optional(),
+          notificationDetails: z
+            .object({
+              url: z.string().url(),
+              token: z.string().min(8),
+            })
+            .optional(),
+          walletAddress: z.string().optional(),
+        })
+        .passthrough(),
+    ]),
+    username: z.string().optional(),
+    notificationDetails: z
+      .object({
         url: z.string().url(),
-        token: z.string().min(8)
-      }).optional(),
-      walletAddress: z.string().optional()
-    }).passthrough()
-  ]),
-  username: z.string().optional(),
-  notificationDetails: z.object({
-    url: z.string().url(),
-    token: z.string().min(8)
-  }).optional(),
-  walletAddress: z.string().optional()
-}).passthrough();
+        token: z.string().min(8),
+      })
+      .optional(),
+    walletAddress: z.string().optional(),
+  })
+  .passthrough();
 
 const AlertPreferenceSchema = z.object({
   fid: z.number().int().positive().optional(),
   walletAddress: z.string().optional(),
   enabled: z.boolean(),
   eventTypes: z.array(z.string()),
-  minSeverity: z.enum(["info", "warning", "critical"]).default("info")
+  minSeverity: z.enum(["info", "warning", "critical"]).default("info"),
 });
 
 const RecommendationSchema = z.object({
-  walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/).optional(),
+  walletAddress: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]+$/)
+    .optional(),
   assetSymbol: z.string().optional(),
-  amountBaseUnits: z.string().regex(/^[1-9]\d*$/).optional()
+  amountBaseUnits: z
+    .string()
+    .regex(/^[1-9]\d*$/)
+    .optional(),
 });
 
 const CapitalDeploySchema = z.object({
@@ -102,18 +122,22 @@ const CapitalDeploySchema = z.object({
     assetSymbol: z.string(),
     status: z.enum(["ready", "fallback", "blocked"]),
     confidenceBps: z.number().int().min(0).max(10000),
-    weights: z.array(z.object({
-      strategyId: z.string(),
-      label: z.string(),
-      targetBps: z.number().int().min(0).max(10000),
-      rationale: z.string()
-    })),
-    riskChecks: z.array(z.object({
-      id: z.string(),
-      label: z.string(),
-      passed: z.boolean(),
-      detail: z.string()
-    })),
+    weights: z.array(
+      z.object({
+        strategyId: z.string(),
+        label: z.string(),
+        targetBps: z.number().int().min(0).max(10000),
+        rationale: z.string(),
+      }),
+    ),
+    riskChecks: z.array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        passed: z.boolean(),
+        detail: z.string(),
+      }),
+    ),
     reasoning: z.string(),
     attestation: z.object({
       provider: z.string(),
@@ -122,21 +146,24 @@ const CapitalDeploySchema = z.object({
       chatId: z.string().optional(),
       providerAddress: z.string().optional(),
       attestationHash: z.string().optional(),
-      setupRequired: z.array(z.string()).optional()
+      setupRequired: z.array(z.string()).optional(),
     }),
-    createdAt: z.string()
-  })
+    createdAt: z.string(),
+  }),
 });
 
 const ZeroGVerifySchema = z.object({
-  providerAddress: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
-  chatId: z.string().optional()
+  providerAddress: z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/)
+    .optional(),
+  chatId: z.string().optional(),
 });
 
 const FarcasterUsernameSchema = z.object({
   walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),
   farcasterUsername: z.string(),
-  farcasterFid: z.number().int().positive().optional()
+  farcasterFid: z.number().int().positive().optional(),
 });
 
 const FarcasterClientSubscriptionSchema = z.object({
@@ -145,21 +172,24 @@ const FarcasterClientSubscriptionSchema = z.object({
   username: z.string().optional(),
   notificationDetails: z.object({
     url: z.string().url(),
-    token: z.string().min(8)
-  })
+    token: z.string().min(8),
+  }),
 });
 
 const EmailAlertsSchema = z.object({
   walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),
   emailAddress: z.string().email(),
-  enabled: z.boolean().optional().default(true)
+  enabled: z.boolean().optional().default(true),
 });
 
 const FaucetMintSchema = z.object({
-  walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/)
+  walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),
 });
 
-export async function registerRoutes(app: FastifyInstance, config: AppConfig): Promise<void> {
+export async function registerRoutes(
+  app: FastifyInstance,
+  config: AppConfig,
+): Promise<void> {
   const bridge = new AtomiqBridgeService(config);
   const vault = new VaultService(config);
   const alerts = new AlertService(config);
@@ -176,8 +206,26 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
   app.get("/health", async () => ({
     ok: true,
     service: "bitflowos-backend",
-    network: config.starknetNetwork
+    network: config.starknetNetwork,
   }));
+
+  app.post("/api/paymaster", async (request, reply) => {
+    const nodeUrl =
+      config.avnuPaymasterNodeUrl || "https://sepolia.paymaster.avnu.fi";
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+    };
+    if (config.avnuPaymasterApiKey) {
+      headers["x-paymaster-api-key"] = config.avnuPaymasterApiKey;
+    }
+    const response = await fetch(nodeUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request.body),
+    });
+    const data = await response.json();
+    return reply.status(response.status).send(data);
+  });
 
   app.get("/api/config", async () => ({
     starknetNetwork: config.starknetNetwork,
@@ -188,45 +236,48 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
       attestationRegistry: config.bitflowosAttestationRegistryAddress,
       erc4626Adapter: config.bitflowosErc4626AdapterAddress,
       leveragedVaultAdapter: config.bitflowosLeveragedVaultAdapterAddress,
-      ekuboAdapter: config.bitflowosEkuboAdapterAddress
+      ekuboAdapter: config.bitflowosEkuboAdapterAddress,
     },
     vaultAddress: config.bitflowosVaultAddress,
-    tokens: Object.values(config.tokens).filter(token => token.enabled),
+    tokens: Object.values(config.tokens).filter((token) => token.enabled),
     strategyRoutes: Object.values(config.strategyRoutes),
     nativeBtcBridge: {
       provider: "atomiq",
       sources: ["BTC", "BTCLN"],
-      defaultOutputToken: config.atomiqDefaultOutputToken
-    }
+      defaultOutputToken: config.atomiqDefaultOutputToken,
+    },
   }));
 
   app.get("/api/starkzap/config", async () => starkzap.getFrontendConfig());
 
-  app.get("/api/wallet/options", async () => starkzap.getFrontendConfig().walletEntryPoints);
+  app.get(
+    "/api/wallet/options",
+    async () => starkzap.getFrontendConfig().walletEntryPoints,
+  );
 
-  app.post("/api/privy/starknet-wallet", async request => {
+  app.post("/api/privy/starknet-wallet", async (request) => {
     const input = PrivyStarknetWalletSchema.parse(request.body);
     const wallet = await privyStarkZap.getOrCreateStarknetWallet(input.userId);
     return {
       walletId: wallet.id,
       address: wallet.address,
       publicKey: wallet.public_key,
-      serverUrl: `${config.privyServerUrl || `http://${config.host}:${config.port}`}/api/privy/raw-sign`
+      serverUrl: `${config.privyServerUrl || `http://${config.host}:${config.port}`}/api/privy/raw-sign`,
     };
   });
 
-  app.post("/api/privy/raw-sign", async request => {
+  app.post("/api/privy/raw-sign", async (request) => {
     const input = PrivyRawSignSchema.parse(request.body);
     return {
-      signature: await privyStarkZap.rawSign(input.walletId, input.hash)
+      signature: await privyStarkZap.rawSign(input.walletId, input.hash),
     };
   });
 
   app.get("/api/market/ticker", async () => ({
-    items: await marketData.getTicker()
+    items: await marketData.getTicker(),
   }));
 
-  app.post("/api/btc-bridge/quote", async request => {
+  app.post("/api/btc-bridge/quote", async (request) => {
     const input = BtcBridgeQuoteSchema.parse(request.body);
     const intent = await bridge.createBtcToStarknetIntent(input);
     if (intent.farcasterFid) {
@@ -235,7 +286,7 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
         type: "bridge_started",
         title: "BTC bridge quote ready",
         body: "Send BTC to the quoted address to start your BitflowOS deposit.",
-        targetUrl: `${config.farcasterAppUrl}/bridge/${intent.id}`
+        targetUrl: `${config.farcasterAppUrl}/bridge/${intent.id}`,
       });
     }
     return intent;
@@ -247,85 +298,92 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
     const id = z.object({ id: z.string().uuid() }).parse(request.params).id;
     const intent = await bridge.getIntent(id);
     if (!intent) {
-      return reply.status(404).send({ error: "not_found", message: "bridge intent not found" });
+      return reply
+        .status(404)
+        .send({ error: "not_found", message: "bridge intent not found" });
     }
     return intent;
   });
 
-  app.post("/api/vault/deposit-calls", async request => {
+  app.post("/api/vault/deposit-calls", async (request) => {
     const input = DepositCallsSchema.parse(request.body);
     return vault.buildDepositCalls(input);
   });
 
-  app.post("/api/vault/withdraw-call", async request => {
+  app.post("/api/vault/withdraw-call", async (request) => {
     const input = WithdrawCallSchema.parse(request.body);
     return vault.buildWithdrawCall(input);
   });
 
-  app.post("/api/router/read-calls", async request => {
+  app.post("/api/router/read-calls", async (request) => {
     const input = RouterReadCallsSchema.parse(request.body);
     return vault.buildRouterReadCalls(input);
   });
 
-  app.post("/api/router/harvest-call", async request => {
+  app.post("/api/router/harvest-call", async (request) => {
     const input = RouterHarvestCallSchema.parse(request.body);
     return vault.buildRouterHarvestCall(input);
   });
 
-  app.get("/api/vault/state", async request => {
+  app.get("/api/vault/state", async (request) => {
     const query = VaultStateQuerySchema.parse(request.query);
     return vault.getVaultState(query.userAddress);
   });
 
-  app.get("/api/strategies/ekubo/quote", async request => {
+  app.get("/api/strategies/ekubo/quote", async (request) => {
     const query = EkuboQuoteSchema.parse(request.query);
     return ekubo.getRouteQuote(query);
   });
 
-  app.post("/api/strategies/ekubo/quote", async request => {
+  app.post("/api/strategies/ekubo/quote", async (request) => {
     const input = EkuboQuoteSchema.parse(request.body);
     return ekubo.getRouteQuote(input);
   });
 
   app.get("/api/ai/status", async () => kimi.getStatus());
 
-  app.post("/api/ai/recommendation", async request => {
+  app.post("/api/ai/recommendation", async (request) => {
     const input = RecommendationSchema.parse(request.body);
     return kimi.recommend(input);
   });
 
-  app.post("/api/ai/deploy-capital", async request => {
+  app.post("/api/ai/deploy-capital", async (request) => {
     const input = CapitalDeploySchema.parse(request.body);
     return capitalDeployment.deploy(input);
   });
 
-  app.post("/api/ai/verify", async request => {
+  app.post("/api/ai/verify", async (request) => {
     const input = ZeroGVerifySchema.parse(request.body);
     if (input.chatId) return zeroG.verifyResponse(input);
     return zeroG.verifyProvider(input.providerAddress);
   });
 
-  app.post("/api/faucet/sbtc-test", async request => {
+  app.post("/api/faucet/sbtc-test", async (request) => {
     const input = FaucetMintSchema.parse(request.body);
     return faucet.mintTestToken(input);
   });
 
   app.get("/api/users/:walletAddress", async (request, reply) => {
-    const { walletAddress } = z.object({
-      walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/)
-    }).parse(request.params);
+    const { walletAddress } = z
+      .object({
+        walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),
+      })
+      .parse(request.params);
     const profile = await profiles.get(walletAddress);
     if (!profile) {
-      return reply.status(404).send({ error: "not_found", message: "user profile not found" });
+      return reply
+        .status(404)
+        .send({ error: "not_found", message: "user profile not found" });
     }
     return {
       ...profile,
-      farcasterNotificationsEnabled: await alerts.hasEnabledSubscriptionForWallet(walletAddress),
-      emailAlertsEnabled: await alerts.hasEnabledEmailForWallet(walletAddress)
+      farcasterNotificationsEnabled:
+        await alerts.hasEnabledSubscriptionForWallet(walletAddress),
+      emailAlertsEnabled: await alerts.hasEnabledEmailForWallet(walletAddress),
     };
   });
 
-  app.post("/api/users/farcaster-username", async request => {
+  app.post("/api/users/farcaster-username", async (request) => {
     const input = FarcasterUsernameSchema.parse(request.body);
     const profile = await profiles.setFarcasterUsername(input);
     return {
@@ -337,30 +395,33 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
         "harvest_available",
         "withdrawal_completed",
         "position_health_warning",
-        "transaction_failed"
+        "transaction_failed",
       ],
-      farcasterNotificationsEnabled: await alerts.hasEnabledSubscriptionForWallet(input.walletAddress),
-      welcome: `Farcaster username saved for @${input.farcasterUsername.replace(/^@/, "")}. To receive inbox alerts, add the BitflowOS Mini App and enable notifications.`
+      farcasterNotificationsEnabled:
+        await alerts.hasEnabledSubscriptionForWallet(input.walletAddress),
+      welcome: `Farcaster username saved for @${input.farcasterUsername.replace(/^@/, "")}. To receive inbox alerts, add the BitflowOS Mini App and enable notifications.`,
     };
   });
 
-  app.post("/api/users/email-alerts", async request => {
+  app.post("/api/users/email-alerts", async (request) => {
     const input = EmailAlertsSchema.parse(request.body);
     const profile = await profiles.setEmailAlerts(input);
     const welcome = await alerts.sendWelcomeEmail({
       walletAddress: input.walletAddress,
-      emailAddress: input.emailAddress
+      emailAddress: input.emailAddress,
     });
     return {
       profile,
-      emailAlertsEnabled: await alerts.hasEnabledEmailForWallet(input.walletAddress),
+      emailAlertsEnabled: await alerts.hasEnabledEmailForWallet(
+        input.walletAddress,
+      ),
       welcome: welcome.delivered
         ? `Email alerts are enabled for ${profile.emailAddress}.`
-        : `Email alerts are saved for ${profile.emailAddress}, but the welcome email could not be sent yet: ${welcome.reason}.`
+        : `Email alerts are saved for ${profile.emailAddress}, but the welcome email could not be sent yet: ${welcome.reason}.`,
     };
   });
 
-  app.post("/api/alerts/farcaster/client-subscription", async request => {
+  app.post("/api/alerts/farcaster/client-subscription", async (request) => {
     const input = FarcasterClientSubscriptionSchema.parse(request.body);
     const profile = await profiles.get(input.walletAddress);
     await alerts.upsertSubscription({
@@ -368,33 +429,51 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
       url: input.notificationDetails.url,
       token: input.notificationDetails.token,
       walletAddress: input.walletAddress,
-      enabled: true
+      enabled: true,
     });
     await profiles.setFarcasterUsername({
       walletAddress: input.walletAddress,
-      farcasterUsername: profile?.farcasterUsername ?? input.username ?? String(input.fid),
-      farcasterFid: input.fid
+      farcasterUsername:
+        profile?.farcasterUsername ?? input.username ?? String(input.fid),
+      farcasterFid: input.fid,
     });
     return {
       ok: true,
-      farcasterNotificationsEnabled: await alerts.hasEnabledSubscriptionForWallet(input.walletAddress)
+      farcasterNotificationsEnabled:
+        await alerts.hasEnabledSubscriptionForWallet(input.walletAddress),
     };
   });
 
-  app.post("/api/alerts/farcaster/webhook", async request => {
+  app.post("/api/alerts/farcaster/webhook", async (request) => {
     const payload = FarcasterWebhookSchema.parse(request.body);
-    const eventName = typeof payload.event === "string" ? payload.event : payload.event.event;
-    const notificationDetails = typeof payload.event === "string" ? payload.notificationDetails : payload.event.notificationDetails;
-    const walletAddress = typeof payload.event === "string" ? payload.walletAddress : payload.event.walletAddress ?? payload.walletAddress;
-    const username = typeof payload.event === "string" ? payload.username : payload.event.username ?? payload.username;
+    const eventName =
+      typeof payload.event === "string" ? payload.event : payload.event.event;
+    const notificationDetails =
+      typeof payload.event === "string"
+        ? payload.notificationDetails
+        : payload.event.notificationDetails;
+    const walletAddress =
+      typeof payload.event === "string"
+        ? payload.walletAddress
+        : (payload.event.walletAddress ?? payload.walletAddress);
+    const username =
+      typeof payload.event === "string"
+        ? payload.username
+        : (payload.event.username ?? payload.username);
 
-    if ((eventName === "miniapp_removed" || eventName === "notifications_disabled") && payload.fid) {
+    if (
+      (eventName === "miniapp_removed" ||
+        eventName === "notifications_disabled") &&
+      payload.fid
+    ) {
       await alerts.upsertSubscription({
         fid: payload.fid,
-        url: notificationDetails?.url ?? "https://api.farcaster.xyz/v1/frame-notifications",
+        url:
+          notificationDetails?.url ??
+          "https://api.farcaster.xyz/v1/frame-notifications",
         token: notificationDetails?.token ?? "disabled",
         walletAddress,
-        enabled: false
+        enabled: false,
       });
       return { ok: true };
     }
@@ -410,13 +489,14 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
         url: notificationDetails.url,
         token: notificationDetails.token,
         walletAddress: walletAddress ?? profile?.walletAddress,
-        enabled: true
+        enabled: true,
       });
       if (profile?.walletAddress) {
         await profiles.setFarcasterUsername({
           walletAddress: profile.walletAddress,
-          farcasterUsername: profile.farcasterUsername ?? username ?? String(payload.fid),
-          farcasterFid: payload.fid
+          farcasterUsername:
+            profile.farcasterUsername ?? username ?? String(payload.fid),
+          farcasterFid: payload.fid,
         });
       }
     }
@@ -424,7 +504,7 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
     return { ok: true };
   });
 
-  app.post("/api/alerts/preferences", async request => {
+  app.post("/api/alerts/preferences", async (request) => {
     const input = AlertPreferenceSchema.parse(request.body);
     return alerts.setPreferences({
       fid: input.fid,
@@ -432,51 +512,63 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig): P
       enabled: input.enabled,
       eventTypes: input.eventTypes as any,
       minSeverity: input.minSeverity,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     });
   });
 
-  app.get("/api/alerts/preferences", async request => {
-    const query = z.object({
-      walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/)
-    }).parse(request.query);
+  app.get("/api/alerts/preferences", async (request) => {
+    const query = z
+      .object({
+        walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),
+      })
+      .parse(request.query);
     const profile = await profiles.get(query.walletAddress);
     const existing = await alerts.getPreferencesForWallet(query.walletAddress);
-    return existing ?? {
-      fid: profile?.farcasterFid,
-      walletAddress: query.walletAddress,
-      enabled: true,
-      eventTypes: [
-        "bridge_started",
-        "bridge_completed",
-        "deposit_confirmed",
-        "staking_started",
-        "harvest_available",
-        "withdrawal_requested",
-        "withdrawal_completed",
-        "position_health_warning",
-        "transaction_failed"
-      ],
-      minSeverity: "info",
-      updatedAt: new Date().toISOString()
-    };
+    return (
+      existing ?? {
+        fid: profile?.farcasterFid,
+        walletAddress: query.walletAddress,
+        enabled: true,
+        eventTypes: [
+          "bridge_started",
+          "bridge_completed",
+          "deposit_confirmed",
+          "staking_started",
+          "harvest_available",
+          "withdrawal_requested",
+          "withdrawal_completed",
+          "position_health_warning",
+          "transaction_failed",
+        ],
+        minSeverity: "info",
+        updatedAt: new Date().toISOString(),
+      }
+    );
   });
 
-  app.post("/api/alerts/position-event", async request => {
-    const input = z.object({
-      walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),
-      type: z.enum(["deposit_confirmed", "staking_started", "withdrawal_requested", "withdrawal_completed", "transaction_failed"]),
-      title: z.string(),
-      body: z.string(),
-      transactionHash: z.string().optional()
-    }).parse(request.body);
+  app.post("/api/alerts/position-event", async (request) => {
+    const input = z
+      .object({
+        walletAddress: z.string().regex(/^0x[0-9a-fA-F]+$/),
+        type: z.enum([
+          "deposit_confirmed",
+          "staking_started",
+          "withdrawal_requested",
+          "withdrawal_completed",
+          "transaction_failed",
+        ]),
+        title: z.string(),
+        body: z.string(),
+        transactionHash: z.string().optional(),
+      })
+      .parse(request.body);
     return alerts.send({
       walletAddress: input.walletAddress,
       type: input.type,
       title: input.title,
       body: input.body,
       targetUrl: config.farcasterAppUrl,
-      transactionHash: input.transactionHash
+      transactionHash: input.transactionHash,
     });
   });
 }

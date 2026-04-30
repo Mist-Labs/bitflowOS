@@ -74,12 +74,20 @@ export function DashboardLive({ config }: { config: AppConfig }) {
       const state = await getVaultState(walletAddress);
       if (!cancelled) {
         setVaultState(state);
-        setLastRefresh(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+        setLastRefresh(
+          new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })
+        );
       }
     }
 
     void refresh();
-    const interval = canReadVault ? window.setInterval(refresh, 5000) : undefined;
+    const interval = canReadVault
+      ? window.setInterval(refresh, 5000)
+      : undefined;
 
     function onRefresh() {
       void refresh();
@@ -106,45 +114,96 @@ export function DashboardLive({ config }: { config: AppConfig }) {
 
   const totals = useMemo(() => summarizeVault(vaultState), [vaultState]);
   const stage = progress?.stage ?? (canReadVault ? "connected" : "waiting");
-  const hasPosition = totals.userManagedRaw > 0n;
-  const liveApy = progress?.recommendation ? recommendationApy(progress.recommendation) : hasPosition ? strategyApy(vaultState) : "SYNCING";
-  const lastRebalance = progress?.stage === "plan_staged"
-    ? "STAGED"
-    : progress?.stage === "recommendation_ready"
-      ? "TEE READY"
-      : progress?.stage === "allocating"
-        ? "BUILDING"
-        : hasPosition
-          ? "LIVE"
-          : "--";
+  const hasVaultPosition = totals.userSharesRaw > 0n;
+  const hasWalletBalance = totals.userWalletRaw > 0n;
+  const liveApy = progress?.recommendation
+    ? recommendationApy(progress.recommendation)
+    : hasVaultPosition
+      ? strategyApy(vaultState)
+      : "SYNCING";
+
+  const lastRebalance =
+    progress?.stage === "plan_staged"
+      ? "STAGED"
+      : progress?.stage === "recommendation_ready"
+        ? "TEE READY"
+        : progress?.stage === "allocating"
+          ? "BUILDING"
+          : hasVaultPosition
+            ? "LIVE"
+            : "--";
+
   const lastRebalanceHint = isBitcoinWallet
     ? "connect Starknet vault wallet"
     : lastRefresh
-      ? hasPosition
+      ? hasVaultPosition
         ? `vault indexed · ${lastRefresh}`
         : `${stage} · ${lastRefresh}`
       : "router events pending";
+
+  // What to show in "Total BTC Managed":
+  // 1. Vault shares if deposited
+  // 2. Wallet token balance if not yet deposited (pending deposit)
+  // 3. "--" if nothing
+  const managedLabel = hasVaultPosition
+    ? totals.userManagedLabel
+    : hasWalletBalance
+      ? totals.userWalletLabel
+      : "--";
+
+  const managedHint = isBitcoinWallet
+    ? "BTC intake wallet connected"
+    : !canReadVault
+      ? config.vaultAddress
+        ? "connect Starknet wallet for position"
+        : "awaiting deployment"
+      : hasVaultPosition
+        ? `${short(walletAddress)} vault position`
+        : hasWalletBalance
+          ? `${short(walletAddress)} wallet balance · deposit to earn`
+          : `${short(walletAddress)} · 0 balance`;
 
   return (
     <section className="stats-grid">
       <div className="stat-card">
         <span>Total BTC Managed</span>
-        <strong className={totals.userManagedRaw > 0n ? "amber" : "amber muted-value"}>{totals.userManagedLabel}</strong>
-        <small>{isBitcoinWallet ? "BTC intake wallet connected" : canReadVault ? `${short(walletAddress)} managed position` : config.vaultAddress ? "connect Starknet wallet for position" : "awaiting deployment"}</small>
+        <strong className={hasVaultPosition || hasWalletBalance ? "amber" : "amber muted-value"}>
+          {managedLabel}
+        </strong>
+        <small>{managedHint}</small>
       </div>
       <div className="stat-card">
         <span>Vault APY</span>
         <strong className="green">{liveApy}</strong>
-        <small>{progress?.recommendation ? "weighted Kimi strategy plan" : hasPosition ? "live configured route blend" : isBitcoinWallet ? "connect Starknet vault wallet" : "from live strategy feeds"}</small>
+        <small>
+          {progress?.recommendation
+            ? "weighted Kimi strategy plan"
+            : hasVaultPosition
+              ? "live configured route blend"
+              : isBitcoinWallet
+                ? "connect Starknet vault wallet"
+                : "from live strategy feeds"}
+        </small>
       </div>
       <div className="stat-card">
         <span>yBTC in Circulation</span>
         <strong>{totals.totalAssetsLabel}</strong>
-        <small>{canReadVault ? totals.totalAssetsRaw > 0n ? `${totals.primarySymbol} vault feed` : "share price after deployment" : "connect Starknet wallet for vault feed"}</small>
+        <small>
+          {canReadVault
+            ? totals.totalAssetsRaw > 0n
+              ? `${totals.primarySymbol} vault feed`
+              : "share price after deployment"
+            : "connect Starknet wallet for vault feed"}
+        </small>
       </div>
       <div className="stat-card">
         <span>Last Rebalance</span>
-        <strong className={lastRebalance === "STAGED" || lastRebalance === "LIVE" ? "green" : undefined} style={{ fontSize: 20 }}>{lastRebalance}</strong>
+        <strong
+          className={lastRebalance === "STAGED" || lastRebalance === "LIVE" ? "green" : undefined}
+          style={{ fontSize: 20 }}
+        >
+          {lastRebalance}
+        </strong>
         <small>{lastRebalanceHint}</small>
       </div>
     </section>
@@ -155,13 +214,15 @@ export function LiveAllocation() {
   const [wallet, setWallet] = useState<WalletState>(null);
   const [progress, setProgress] = useState<AllocationProgress | null>(null);
   const [vaultState, setVaultState] = useState<VaultState | null>(null);
-  const canReadVault = Boolean(wallet?.address && /^0x[0-9a-fA-F]+$/.test(wallet.address));
+  const canReadVault = Boolean(
+    wallet?.address && /^0x[0-9a-fA-F]+$/.test(wallet.address)
+  );
 
   useEffect(() => {
     function readWallet() {
       try {
         const raw = window.localStorage.getItem(WALLET_KEY);
-        setWallet(raw ? JSON.parse(raw) as WalletState : null);
+        setWallet(raw ? (JSON.parse(raw) as WalletState) : null);
       } catch {
         setWallet(null);
       }
@@ -217,23 +278,32 @@ export function LiveAllocation() {
   const liveStrategies = useMemo(() => {
     const rec = progress?.recommendation;
     if (!rec) return strategies;
-    return strategies.map(strategy => {
-      const weight = rec.weights.find(item => item.strategyId === strategy.id || item.label.toLowerCase().includes(strategy.name.toLowerCase()));
-      return weight ? { ...strategy, allocation: Math.round(weight.targetBps / 100) } : strategy;
+    return strategies.map((strategy) => {
+      const weight = rec.weights.find(
+        (item) =>
+          item.strategyId === strategy.id ||
+          item.label.toLowerCase().includes(strategy.name.toLowerCase())
+      );
+      return weight
+        ? { ...strategy, allocation: Math.round(weight.targetBps / 100) }
+        : strategy;
     });
   }, [progress]);
 
   return (
     <>
       <div className="alloc-body">
-        {liveStrategies.map(strategy => (
+        {liveStrategies.map((strategy) => (
           <div className="alloc-row" key={strategy.id}>
             <div>
               <strong>{strategy.name}</strong>
               <small>{strategy.protocol}</small>
             </div>
             <div className="alloc-bar-wrap">
-              <span className={`alloc-bar ${strategy.risk}`} style={{ width: `${strategy.allocation}%` }} />
+              <span
+                className={`alloc-bar ${strategy.risk}`}
+                style={{ width: `${strategy.allocation}%` }}
+              />
             </div>
             <span>{strategy.allocation}%</span>
             <span className="green-text">{strategy.apy}</span>
@@ -245,14 +315,27 @@ export function LiveAllocation() {
   );
 }
 
-function PositionActions({ wallet, externalVaultState }: { wallet: WalletState; externalVaultState?: VaultState | null }) {
+function PositionActions({
+  wallet,
+  externalVaultState,
+}: {
+  wallet: WalletState;
+  externalVaultState?: VaultState | null;
+}) {
   const [busy, setBusy] = useState<PositionAction | null>(null);
   const [status, setStatus] = useState("");
   const [vaultState, setVaultState] = useState<VaultState | null>(null);
   const walletAddress = wallet?.address ?? "";
-  const canReadVault = Boolean(walletAddress && /^0x[0-9a-fA-F]+$/.test(walletAddress));
+  const canReadVault = Boolean(
+    walletAddress && /^0x[0-9a-fA-F]+$/.test(walletAddress)
+  );
   const position = useMemo(() => findPositionAsset(vaultState), [vaultState]);
-  const hasPosition = Boolean(canReadVault && position && (toBigInt(position.userShares) > 0n || toBigInt(position.userAssetShares) > 0n));
+  const hasPosition = Boolean(
+    canReadVault &&
+      position &&
+      (toBigInt(position.userShares) > 0n ||
+        toBigInt(position.userAssetShares) > 0n)
+  );
   const hasClaimableRewards = false;
 
   useEffect(() => {
@@ -281,32 +364,55 @@ function PositionActions({ wallet, externalVaultState }: { wallet: WalletState; 
 
   useEffect(() => {
     function onAction(event: Event) {
-      const action = (event as CustomEvent<{ action?: PositionAction }>).detail?.action;
+      const action = (event as CustomEvent<{ action?: PositionAction }>).detail
+        ?.action;
       if (action === "claim") void claimRewards();
       if (action === "withdraw") void withdrawAll();
     }
 
     window.addEventListener("bitflowos:position-action-request", onAction);
-    return () => window.removeEventListener("bitflowos:position-action-request", onAction);
-  }, [walletAddress, position?.symbol, position?.userShares, position?.userAssetShares]);
+    return () =>
+      window.removeEventListener(
+        "bitflowos:position-action-request",
+        onAction
+      );
+  }, [
+    walletAddress,
+    position?.symbol,
+    position?.userShares,
+    position?.userAssetShares,
+  ]);
 
   async function claimRewards() {
     if (!canReadVault || !position) {
-      setStatus(wallet?.chain === "bitcoin" ? "Connect your Starknet vault wallet to claim rewards." : "Connect a wallet with a vault position first.");
+      setStatus(
+        wallet?.chain === "bitcoin"
+          ? "Connect your Starknet vault wallet to claim rewards."
+          : "Connect a wallet with a vault position first."
+      );
       return;
     }
     if (!hasClaimableRewards) {
-      setStatus("No separate rewards to claim yet. Yield is reflected in your yBTC position value and is received when you withdraw.");
+      setStatus(
+        "No separate rewards to claim yet. Yield is reflected in your yBTC position value and is received when you withdraw."
+      );
       return;
     }
   }
 
   async function withdrawAll() {
     if (!canReadVault || !position) {
-      setStatus(wallet?.chain === "bitcoin" ? "Connect your Starknet vault wallet to withdraw." : "Connect a wallet with a vault position first.");
+      setStatus(
+        wallet?.chain === "bitcoin"
+          ? "Connect your Starknet vault wallet to withdraw."
+          : "Connect a wallet with a vault position first."
+      );
       return;
     }
-    const shares = toBigInt(position.userAssetShares) > 0n ? position.userAssetShares : position.userShares;
+    const shares =
+      toBigInt(position.userAssetShares) > 0n
+        ? position.userAssetShares
+        : position.userShares;
     if (toBigInt(shares) <= 0n) {
       setStatus("No withdrawable yBTC shares found for this wallet.");
       return;
@@ -315,7 +421,10 @@ function PositionActions({ wallet, externalVaultState }: { wallet: WalletState; 
     setBusy("withdraw");
     setStatus("Preparing withdrawal...");
     try {
-      const call = await buildWithdrawCall({ tokenSymbol: position.symbol, sharesBaseUnits: shares });
+      const call = await buildWithdrawCall({
+        tokenSymbol: position.symbol,
+        sharesBaseUnits: shares,
+      });
       const execution = await executeStarknetMulticallViaStarkZap([call.call]);
       setStatus(`Withdrawal submitted: ${short(execution.hash)}.`);
       void sendPositionAlert({
@@ -323,7 +432,7 @@ function PositionActions({ wallet, externalVaultState }: { wallet: WalletState; 
         type: "withdrawal_requested",
         title: "Withdrawal submitted",
         body: `BitflowOS withdrawal was submitted for ${position.symbol}.`,
-        transactionHash: execution.hash
+        transactionHash: execution.hash,
       });
       window.dispatchEvent(new CustomEvent("bitflowos:vault-refresh"));
     } catch (error) {
@@ -337,13 +446,33 @@ function PositionActions({ wallet, externalVaultState }: { wallet: WalletState; 
     <div className="position-actions">
       <div>
         <strong>Position Controls</strong>
-        <small>{wallet?.chain === "bitcoin" ? "connect Starknet wallet to manage vault" : canReadVault ? hasPosition ? `${position?.symbol} position active` : "no active position for this wallet" : "connect wallet to manage positions"}</small>
+        <small>
+          {wallet?.chain === "bitcoin"
+            ? "connect Starknet wallet to manage vault"
+            : canReadVault
+              ? hasPosition
+                ? `${position?.symbol} position active`
+                : "no active position for this wallet"
+              : "connect wallet to manage positions"}
+        </small>
       </div>
       <div className="position-action-buttons">
-        <button onClick={claimRewards} disabled={!hasPosition || busy !== null} type="button">
-          {busy === "claim" ? "Checking..." : hasClaimableRewards ? "Claim Rewards" : "Rewards"}
+        <button
+          onClick={claimRewards}
+          disabled={!hasPosition || busy !== null}
+          type="button"
+        >
+          {busy === "claim"
+            ? "Checking..."
+            : hasClaimableRewards
+              ? "Claim Rewards"
+              : "Rewards"}
         </button>
-        <button onClick={withdrawAll} disabled={!hasPosition || busy !== null} type="button">
+        <button
+          onClick={withdrawAll}
+          disabled={!hasPosition || busy !== null}
+          type="button"
+        >
           {busy === "withdraw" ? "Signing..." : "Withdraw All"}
         </button>
       </div>
@@ -352,69 +481,115 @@ function PositionActions({ wallet, externalVaultState }: { wallet: WalletState; 
   );
 }
 
+// ─── Vault summarization ──────────────────────────────────────────────────────
+
 function summarizeVault(state: VaultState | null) {
   const displayDecimals = 8;
+
   if (!state?.assets.length) {
     return {
       totalAssetsRaw: 0n,
       totalAssetsLabel: "--",
-      userManagedRaw: 0n,
+      userSharesRaw: 0n,
       userManagedLabel: "--",
-      primarySymbol: "BTC"
+      userWalletRaw: 0n,
+      userWalletLabel: "--",
+      primarySymbol: "BTC",
     };
   }
 
-  const primary = state.assets.find(asset => toBigInt(asset.totalAssets) > 0n)
-    ?? state.assets.find(asset => toBigInt(asset.userShares) > 0n || toBigInt(asset.userAssetShares) > 0n)
-    ?? state.assets[0];
+  const primary =
+    state.assets.find((a) => toBigInt(a.totalAssets) > 0n) ??
+    state.assets.find(
+      (a) =>
+        toBigInt(a.userShares) > 0n || toBigInt(a.userAssetShares) > 0n
+    ) ??
+    state.assets[0];
+
   const totalAssetsRaw = state.assets.reduce(
-    (sum, asset) => sum + normalizeToDecimals(toBigInt(asset.totalAssets), asset.decimals, displayDecimals),
+    (sum, a) =>
+      sum + normalizeToDecimals(toBigInt(a.totalAssets), a.decimals, displayDecimals),
     0n
   );
+
+  // Vault shares (post-deposit)
   const userAssetSharesRaw = state.assets.reduce(
-    (sum, asset) => sum + normalizeToDecimals(toBigInt(asset.userAssetShares), asset.decimals, displayDecimals),
+    (sum, a) =>
+      sum +
+      normalizeToDecimals(toBigInt(a.userAssetShares), a.decimals, displayDecimals),
     0n
   );
-  const globalUserSharesRaw = state.assets.reduce((max, asset) => {
-    const shares = normalizeToDecimals(toBigInt(asset.userShares), asset.decimals, displayDecimals);
+  const globalUserSharesRaw = state.assets.reduce((max, a) => {
+    const shares = normalizeToDecimals(
+      toBigInt(a.userShares),
+      a.decimals,
+      displayDecimals
+    );
     return shares > max ? shares : max;
   }, 0n);
-  const userSharesRaw = userAssetSharesRaw > 0n ? userAssetSharesRaw : globalUserSharesRaw;
+  const userSharesRaw =
+    userAssetSharesRaw > 0n ? userAssetSharesRaw : globalUserSharesRaw;
+
+  // Wallet token balance (pre-deposit / pending)
+  const userWalletRaw = state.assets.reduce(
+    (sum, a) =>
+      sum +
+      normalizeToDecimals(
+        toBigInt(a.userWalletBalance),
+        a.decimals,
+        displayDecimals
+      ),
+    0n
+  );
 
   return {
     totalAssetsRaw,
-    totalAssetsLabel: totalAssetsRaw > 0n ? compactUnits(totalAssetsRaw, displayDecimals) : "--",
-    userManagedRaw: userSharesRaw,
-    userManagedLabel: userSharesRaw > 0n ? compactUnits(userSharesRaw, displayDecimals) : "--",
-    primarySymbol: primary.symbol
+    totalAssetsLabel:
+      totalAssetsRaw > 0n ? compactUnits(totalAssetsRaw, displayDecimals) : "--",
+    userSharesRaw,
+    userManagedLabel:
+      userSharesRaw > 0n ? compactUnits(userSharesRaw, displayDecimals) : "--",
+    userWalletRaw,
+    userWalletLabel:
+      userWalletRaw > 0n ? compactUnits(userWalletRaw, displayDecimals) : "--",
+    primarySymbol: primary.symbol,
   };
 }
 
 function findPositionAsset(state: VaultState | null) {
-  return state?.assets.find(asset => toBigInt(asset.userAssetShares) > 0n)
-    ?? state?.assets.find(asset => toBigInt(asset.userShares) > 0n)
-    ?? null;
+  return (
+    state?.assets.find((a) => toBigInt(a.userAssetShares) > 0n) ??
+    state?.assets.find((a) => toBigInt(a.userShares) > 0n) ??
+    null
+  );
 }
 
 function strategyApy(state: VaultState | null) {
   if (!state?.strategies.length) return "SYNCING";
-  const configured = state.strategies.filter(strategy => strategy.configured);
+  const configured = state.strategies.filter((s) => s.configured);
   if (!configured.length) return "SYNCING";
-  const apy = configured.some(strategy => strategy.kind === "ekubo") ? 5.1 : 4.8;
+  const apy = configured.some((s) => s.kind === "ekubo") ? 5.1 : 4.8;
   return `${apy.toFixed(1)}%`;
 }
 
 function recommendationApy(recommendation: AllocationRecommendation) {
   const weighted = recommendation.weights.reduce((sum, item) => {
     const label = item.label.toLowerCase();
-    const apy = label.includes("ekubo") ? 5.6 : label.includes("idle") ? 0 : 4.8;
+    const apy = label.includes("ekubo")
+      ? 5.6
+      : label.includes("idle")
+        ? 0
+        : 4.8;
     return sum + apy * (item.targetBps / 10000);
   }, 0);
   return `${Math.max(weighted, 0).toFixed(1)}%`;
 }
 
-function compactUnits(value: bigint, decimals: number) {
-  if (decimals <= 0) return value >= 10000n ? compactWhole(value) : value.toString();
+// ─── Formatting helpers ───────────────────────────────────────────────────────
+
+function compactUnits(value: bigint, decimals: number): string {
+  if (decimals <= 0)
+    return value >= 10000n ? compactWhole(value) : value.toString();
   const divisor = 10n ** BigInt(decimals);
   const oneSatoshi = decimals > 8 ? 10n ** BigInt(decimals - 8) : 1n;
   if (value > 0n && value < oneSatoshi) return "<0.00000001";
@@ -422,30 +597,41 @@ function compactUnits(value: bigint, decimals: number) {
   const fraction = value % divisor;
   if (whole >= 10000n) return compactWhole(whole);
   if (whole > 0n) {
-    const frac = fraction.toString().padStart(decimals, "0").slice(0, 4).replace(/0+$/, "");
+    const frac = fraction
+      .toString()
+      .padStart(decimals, "0")
+      .slice(0, 4)
+      .replace(/0+$/, "");
     return frac ? `${whole}.${frac}` : whole.toString();
   }
   const raw = fraction.toString().padStart(decimals, "0");
   const firstNonZero = raw.search(/[1-9]/);
   if (firstNonZero === -1) return "0";
-  return `0.${raw.slice(0, Math.min(decimals, firstNonZero + 4)).replace(/0+$/, "")}`;
+  return `0.${raw
+    .slice(0, Math.min(decimals, firstNonZero + 4))
+    .replace(/0+$/, "")}`;
 }
 
-function normalizeToDecimals(value: bigint, fromDecimals: number, toDecimals: number) {
+function normalizeToDecimals(
+  value: bigint,
+  fromDecimals: number,
+  toDecimals: number
+) {
   if (value === 0n || fromDecimals === toDecimals) return value;
-  if (fromDecimals > toDecimals) return value / (10n ** BigInt(fromDecimals - toDecimals));
-  return value * (10n ** BigInt(toDecimals - fromDecimals));
+  if (fromDecimals > toDecimals)
+    return value / 10n ** BigInt(fromDecimals - toDecimals);
+  return value * 10n ** BigInt(toDecimals - fromDecimals);
 }
 
-function compactWhole(value: bigint) {
+function compactWhole(value: bigint): string {
   const units = [
     { suffix: "B", size: 1_000_000_000n },
     { suffix: "M", size: 1_000_000n },
-    { suffix: "K", size: 1_000n }
+    { suffix: "K", size: 1_000n },
   ];
-  const unit = units.find(item => value >= item.size);
+  const unit = units.find((u) => value >= u.size);
   if (!unit) return value.toString();
-  const scaledTimesTen = value * 10n / unit.size;
+  const scaledTimesTen = (value * 10n) / unit.size;
   const whole = scaledTimesTen / 10n;
   const decimal = scaledTimesTen % 10n;
   return decimal > 0n && whole < 100n

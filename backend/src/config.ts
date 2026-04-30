@@ -55,6 +55,7 @@ const EnvSchema = z.object({
   EKUBO_API_URL: z.string().url().default("https://prod-api.ekubo.org"),
   EKUBO_CHAIN_ID: z.string().default("0x534e5f4d41494f"),
   AVNU_PAYMASTER_NODE_URL: z.string().url().or(z.literal("")).default(""),
+  AVNU_PAYMASTER_API_KEY: z.string().optional().default(""),
   PRIVY_APP_ID: z.string().optional().default(""),
   PRIVY_APP_SECRET: z.string().optional().default(""),
   PRIVY_SERVER_URL: z.string().url().or(z.literal("")).default(""),
@@ -107,6 +108,7 @@ export interface AppConfig {
   atomiqMempoolApiUrl: string;
   atomiqPricingApiUrl: string;
   avnuPaymasterNodeUrl: string;
+  avnuPaymasterApiKey: string;
   privyAppId: string;
   privyAppSecret: string;
   privyServerUrl: string;
@@ -167,6 +169,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     atomiqMempoolApiUrl: parsed.ATOMIQ_MEMPOOL_API_URL,
     atomiqPricingApiUrl: parsed.ATOMIQ_PRICING_API_URL.replace(/\/$/, ""),
     avnuPaymasterNodeUrl: parsed.AVNU_PAYMASTER_NODE_URL,
+    avnuPaymasterApiKey: parsed.AVNU_PAYMASTER_API_KEY,
     privyAppId: parsed.PRIVY_APP_ID,
     privyAppSecret: parsed.PRIVY_APP_SECRET,
     privyServerUrl: parsed.PRIVY_SERVER_URL,

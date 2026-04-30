@@ -102,9 +102,19 @@ export type VaultState = {
 export type StarkZapConfig = {
   package: string;
   network: string;
-  rpcUrl?: string;
-  walletEntryPoints: WalletOption[];
-  paymasters: Record<string, unknown>;
+  rpcUrl: string;
+  walletEntryPoints: unknown[];
+  paymasters: {
+    avnu?: {
+      enabled?: boolean;
+      nodeUrl?: string;
+      usedFor?: string[];
+    };
+    cartridge?: {
+      enabled?: boolean;
+      policyBound?: boolean;
+    };
+  };
   productModules: Record<string, unknown>;
 };
 

@@ -10,6 +10,24 @@ import {
 } from "../lib/starknet.js";
 import type { StarknetCall } from "../types.js";
 
+const ZERO_U256 = ["0x0", "0x0"];
+
+/** Wraps starknetCall — returns a zero fallback instead of throwing. */
+async function safeCall(
+  args: Parameters<typeof starknetCall>[0],
+  fallback: string[] = ZERO_U256
+): Promise<string[]> {
+  try {
+    return await starknetCall(args);
+  } catch (err) {
+    console.warn(
+      `[VaultService] safeCall failed ${args.contractAddress} ${args.entrypoint}:`,
+      (err as Error).message
+    );
+    return fallback;
+  }
+}
+
 export class VaultService {
   constructor(private readonly config: AppConfig) {}
 
@@ -19,13 +37,11 @@ export class VaultService {
     calls: StarknetCall[];
   } {
     const token = this.getEnabledToken(input.tokenSymbol);
-
     const calls = buildYieldVaultDepositCalls({
       tokenAddress: token.address,
       vaultAddress: this.config.bitflowosVaultAddress,
-      amountBaseUnits: input.amountBaseUnits
+      amountBaseUnits: input.amountBaseUnits,
     });
-
     return {
       tokenAddress: token.address,
       vaultAddress: this.config.bitflowosVaultAddress,
@@ -91,110 +107,136 @@ export class VaultService {
   }
 
   async getVaultState(userAddress?: string): Promise<unknown> {
-    const tokens = Object.values(this.config.tokens).filter(token => token.enabled);
-    const routes = Object.values(this.config.strategyRoutes).filter(route => route.enabled);
+    const tokens = Object.values(this.config.tokens).filter(t => t.enabled);
+    const routes = Object.values(this.config.strategyRoutes).filter(r => r.enabled);
 
-    const assetStates = await Promise.all(tokens.map(async token => {
-      const [totalAssets, supportedRaw, userSharesRaw, userAssetSharesRaw, tokenBalanceRaw] =
-        await Promise.all([
-          starknetCall({
+    // Normalize address to avoid felt comparison mismatches
+    const normalizedUser = userAddress ? normalizeFelt(userAddress) : undefined;
+
+    const assetStates = await Promise.all(
+      tokens.map(async token => {
+        const [
+          totalAssetsRaw,
+          supportedRaw,
+          userSharesRaw,
+          userAssetSharesRaw,
+          tokenBalanceRaw
+        ] = await Promise.all([
+          safeCall({
             rpcUrl: this.config.starknetRpcUrl,
             contractAddress: this.config.bitflowosVaultAddress,
             entrypoint: "total_assets",
             calldata: [token.address]
           }),
-          starknetCall({
+          safeCall({
             rpcUrl: this.config.starknetRpcUrl,
             contractAddress: this.config.bitflowosVaultAddress,
             entrypoint: "is_supported_asset",
             calldata: [token.address]
-          }),
-          userAddress
-            ? starknetCall({
-              rpcUrl: this.config.starknetRpcUrl,
-              contractAddress: this.config.bitflowosVaultAddress,
-              entrypoint: "get_user_position",
-              calldata: [userAddress]
-            })
-            : Promise.resolve(["0x0", "0x0"]),
-          userAddress
-            ? starknetCall({
-              rpcUrl: this.config.starknetRpcUrl,
-              contractAddress: this.config.bitflowosVaultAddress,
-              entrypoint: "get_user_asset_position",
-              calldata: [userAddress, token.address]
-            })
-            : Promise.resolve(["0x0", "0x0"]),
-          userAddress
-            ? starknetCall({
-              rpcUrl: this.config.starknetRpcUrl,
-              contractAddress: token.address,
-              entrypoint: "balance_of",
-              calldata: [userAddress]
-            })
-            : Promise.resolve(["0x0", "0x0"])
+          }, ["0x0"]),
+          normalizedUser
+            ? safeCall({
+                rpcUrl: this.config.starknetRpcUrl,
+                contractAddress: this.config.bitflowosVaultAddress,
+                entrypoint: "get_user_position",
+                calldata: [normalizedUser]
+              })
+            : Promise.resolve(ZERO_U256),
+          normalizedUser
+            ? safeCall({
+                rpcUrl: this.config.starknetRpcUrl,
+                contractAddress: this.config.bitflowosVaultAddress,
+                entrypoint: "get_user_asset_position",
+                calldata: [normalizedUser, token.address]
+              })
+            : Promise.resolve(ZERO_U256),
+          normalizedUser
+            ? safeCall({
+                rpcUrl: this.config.starknetRpcUrl,
+                contractAddress: token.address,
+                entrypoint: "balance_of",
+                calldata: [normalizedUser]
+              })
+            : Promise.resolve(ZERO_U256)
         ]);
 
-      return {
-        symbol: token.symbol,
-        address: token.address,
-        decimals: token.decimals,
-        kind: token.kind,
-        supported: parseFelt(supportedRaw) !== "0x0",
-        totalAssets: parseU256(totalAssets),
-        userShares: parseU256(userSharesRaw),
-        userAssetShares: parseU256(userAssetSharesRaw),
-        userWalletBalance: parseU256(tokenBalanceRaw)
-      };
-    }));
+        const userShares      = parseU256(userSharesRaw);
+        const userAssetShares = parseU256(userAssetSharesRaw);
+        const walletBalance   = parseU256(tokenBalanceRaw);
 
-    const strategyStates = await Promise.all(routes.map(async route => {
-      const token = this.config.tokens[route.assetSymbol];
-      if (!token || !this.config.bitflowosStrategyRouterAddress) {
-        return { ...route, configured: false };
-      }
+        if (normalizedUser) {
+          console.log(
+            `[VaultService] ${token.symbol} ` +
+            `userShares=${userShares} userAssetShares=${userAssetShares} ` +
+            `walletBalance=${walletBalance}`
+          );
+        }
 
-      const [adapterRaw, positionRaw, adapterPositionRaw] = await Promise.all([
-        starknetCall({
-          rpcUrl: this.config.starknetRpcUrl,
-          contractAddress: this.config.bitflowosStrategyRouterAddress,
-          entrypoint: "get_strategy_adapter",
-          calldata: [route.id]
-        }),
-        starknetCall({
-          rpcUrl: this.config.starknetRpcUrl,
-          contractAddress: this.config.bitflowosStrategyRouterAddress,
-          entrypoint: "get_strategy_position",
-          calldata: [route.id, token.address]
-        }),
-        starknetCall({
-          rpcUrl: this.config.starknetRpcUrl,
-          contractAddress: route.adapterAddress,
-          entrypoint: "total_position",
-          calldata: [token.address]
-        })
-      ]);
+        return {
+          symbol:            token.symbol,
+          address:           token.address,
+          decimals:          token.decimals,
+          kind:              token.kind,
+          supported:         parseFelt(supportedRaw) !== "0x0",
+          totalAssets:       parseU256(totalAssetsRaw),
+          userShares,
+          userAssetShares,
+          userWalletBalance: walletBalance
+        };
+      })
+    );
 
-      return {
-        ...route,
-        configured: normalizeFelt(parseFelt(adapterRaw)) === normalizeFelt(route.adapterAddress),
-        routerPosition: parseU256(positionRaw),
-        adapterPosition: parseU256(adapterPositionRaw)
-      };
-    }));
+    const strategyStates = await Promise.all(
+      routes.map(async route => {
+        const token = this.config.tokens[route.assetSymbol];
+        if (!token || !this.config.bitflowosStrategyRouterAddress) {
+          return { ...route, configured: false };
+        }
+
+        const [adapterRaw, positionRaw, adapterPositionRaw] = await Promise.all([
+          safeCall({
+            rpcUrl: this.config.starknetRpcUrl,
+            contractAddress: this.config.bitflowosStrategyRouterAddress,
+            entrypoint: "get_strategy_adapter",
+            calldata: [route.id]
+          }, ["0x0"]),
+          safeCall({
+            rpcUrl: this.config.starknetRpcUrl,
+            contractAddress: this.config.bitflowosStrategyRouterAddress,
+            entrypoint: "get_strategy_position",
+            calldata: [route.id, token.address]
+          }),
+          safeCall({
+            rpcUrl: this.config.starknetRpcUrl,
+            contractAddress: route.adapterAddress,
+            entrypoint: "total_position",
+            calldata: [token.address]
+          })
+        ]);
+
+        return {
+          ...route,
+          configured:
+            normalizeFelt(parseFelt(adapterRaw)) ===
+            normalizeFelt(route.adapterAddress),
+          routerPosition:  parseU256(positionRaw),
+          adapterPosition: parseU256(adapterPositionRaw)
+        };
+      })
+    );
 
     return {
-      network: this.config.starknetNetwork,
-      rpcUrl: this.config.starknetRpcUrl,
+      network:   this.config.starknetNetwork,
+      rpcUrl:    this.config.starknetRpcUrl,
       contracts: {
-        vault: this.config.bitflowosVaultAddress,
-        router: this.config.bitflowosStrategyRouterAddress,
+        vault:               this.config.bitflowosVaultAddress,
+        router:              this.config.bitflowosStrategyRouterAddress,
         attestationRegistry: this.config.bitflowosAttestationRegistryAddress,
-        erc4626Adapter: this.config.bitflowosErc4626AdapterAddress,
+        erc4626Adapter:      this.config.bitflowosErc4626AdapterAddress,
         leveragedVaultAdapter: this.config.bitflowosLeveragedVaultAdapterAddress,
-        ekuboAdapter: this.config.bitflowosEkuboAdapterAddress
+        ekuboAdapter:        this.config.bitflowosEkuboAdapterAddress
       },
-      assets: assetStates,
+      assets:     assetStates,
       strategies: strategyStates
     };
   }
@@ -210,5 +252,9 @@ export class VaultService {
 }
 
 function normalizeFelt(value: string): string {
-  return `0x${BigInt(value).toString(16)}`;
+  try {
+    return `0x${BigInt(value).toString(16)}`;
+  } catch {
+    return value;
+  }
 }
