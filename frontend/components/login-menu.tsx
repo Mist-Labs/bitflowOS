@@ -3,7 +3,11 @@
 import { Bitcoin, ChevronDown, KeyRound, Mail, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useBitflowAuth } from "./providers";
-import { clearRuntimeStarknetWallet, discoverInjectedStarknetWallets, setRuntimeStarknetWallet } from "@/lib/starknet-wallet-runtime";
+import {
+  clearRuntimeStarknetWallet,
+  discoverInjectedStarknetWallets,
+  setRuntimeStarknetWallet,
+} from "@/lib/starknet-wallet-runtime";
 import { getPrivyStarknetWallet, getStarkZapConfig } from "@/lib/api";
 
 type Step = "root" | "chain" | "starknet" | "bitcoin";
@@ -14,7 +18,9 @@ type ConnectedWallet = {
 };
 
 const STORAGE_KEY = "bitflowos.connectedWallet";
-const EXPECTED_APP_ORIGIN = process.env.NEXT_PUBLIC_APP_URL ? safeOrigin(process.env.NEXT_PUBLIC_APP_URL) : "";
+const EXPECTED_APP_ORIGIN = process.env.NEXT_PUBLIC_APP_URL
+  ? safeOrigin(process.env.NEXT_PUBLIC_APP_URL)
+  : "";
 
 function formatAddress(address?: string) {
   if (!address) return "";
@@ -32,30 +38,39 @@ function discoverStarknetAddress() {
   if (typeof window === "undefined") return undefined;
   const wallets = discoverInjectedStarknetWallets();
   const wallet = wallets[0];
-  return normalizeAddress(
-    wallet?.selectedAddress
-      ?? wallet?.account?.address
-  );
+  return normalizeAddress(wallet?.selectedAddress ?? wallet?.account?.address);
 }
 
 function extractBitcoinAccounts(result: unknown): Array<{ address?: string }> {
   const payload = result as {
     status?: "success" | "error";
-    result?: Array<{ address?: string }> | { addresses?: Array<{ address?: string }> };
+    result?:
+      | Array<{ address?: string }>
+      | { addresses?: Array<{ address?: string }> };
     addresses?: Array<{ address?: string }>;
   };
   if (payload.status === "error") return [];
   if (Array.isArray(payload.result)) return payload.result;
-  if (payload.result && "addresses" in payload.result) return payload.result.addresses ?? [];
+  if (payload.result && "addresses" in payload.result)
+    return payload.result.addresses ?? [];
   return payload.addresses ?? [];
 }
 
 export function LoginMenu() {
-  const { authenticated, loginWithPrivy, logoutPrivy, privyConfigured, privyReady, privyUserId, privyError } = useBitflowAuth();
+  const {
+    authenticated,
+    loginWithPrivy,
+    logoutPrivy,
+    privyConfigured,
+    privyReady,
+    privyUserId,
+    privyError,
+  } = useBitflowAuth();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("root");
   const [status, setStatus] = useState("Choose a login method");
-  const [connectedWallet, setConnectedWallet] = useState<ConnectedWallet | null>(null);
+  const [connectedWallet, setConnectedWallet] =
+    useState<ConnectedWallet | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const lastPrivyUserRef = useRef("");
 
@@ -69,7 +84,9 @@ export function LoginMenu() {
         setConnectedWallet(hydrated);
         if (address && !wallet.address) {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(hydrated));
-          window.dispatchEvent(new CustomEvent("bitflowos:wallet", { detail: hydrated }));
+          window.dispatchEvent(
+            new CustomEvent("bitflowos:wallet", { detail: hydrated }),
+          );
         }
       }
     } catch {
@@ -78,7 +95,12 @@ export function LoginMenu() {
   }, []);
 
   useEffect(() => {
-    if (!authenticated || !privyUserId || lastPrivyUserRef.current === privyUserId) return;
+    if (
+      !authenticated ||
+      !privyUserId ||
+      lastPrivyUserRef.current === privyUserId
+    )
+      return;
     lastPrivyUserRef.current = privyUserId;
     void connectPrivyThroughStarkZap(privyUserId);
   }, [authenticated, privyUserId]);
@@ -107,21 +129,35 @@ export function LoginMenu() {
         setStatus("No Starknet wallet selected");
         return;
       }
-      const enabled = await (wallet as unknown as { enable?: () => Promise<string[]> }).enable?.();
-      const requested = await (wallet as unknown as { request?: (input: { type: string }) => Promise<string[]> }).request?.({
-        type: "wallet_requestAccounts"
-      }).catch(() => undefined);
+      const enabled = await (
+        wallet as unknown as { enable?: () => Promise<string[]> }
+      ).enable?.();
+      const requested = await (
+        wallet as unknown as {
+          request?: (input: { type: string }) => Promise<string[]>;
+        }
+      )
+        .request?.({
+          type: "wallet_requestAccounts",
+        })
+        .catch(() => undefined);
       const address = normalizeAddress(
-        (wallet as unknown as { selectedAddress?: string; account?: { address?: string } }).selectedAddress
-          ?? (wallet as unknown as { account?: { address?: string } }).account?.address
-          ?? requested?.[0]
-          ?? enabled?.[0]
+        (
+          wallet as unknown as {
+            selectedAddress?: string;
+            account?: { address?: string };
+          }
+        ).selectedAddress ??
+          (wallet as unknown as { account?: { address?: string } }).account
+            ?.address ??
+          requested?.[0] ??
+          enabled?.[0],
       );
       setRuntimeStarknetWallet(wallet as never);
       setWallet({
         chain: "starknet",
         label: wallet.name ?? "Starknet wallet",
-        address
+        address,
       });
       setStatus(`Connected ${wallet.name ?? "Starknet wallet"}`);
       setOpen(false);
@@ -143,19 +179,29 @@ export function LoginMenu() {
       const { AddressPurpose, BitcoinNetworkType } = satsConnect;
       const params = {
         permissions: [
-          { type: "account" as const, resourceId: "account", actions: { read: true } },
-          { type: "wallet" as const, resourceId: "wallet", actions: { readNetwork: true } }
+          {
+            type: "account" as const,
+            resourceId: "account",
+            actions: { read: true },
+          },
+          {
+            type: "wallet" as const,
+            resourceId: "wallet",
+            actions: { readNetwork: true },
+          },
         ],
         addresses: [AddressPurpose.Payment, AddressPurpose.Ordinals],
         message: "Connect BTC address",
-        network: BitcoinNetworkType.Testnet
+        network: BitcoinNetworkType.Testnet,
       };
       const result = await request("wallet_connect", params)
         .catch(async () => request("wallet_getAccount", null))
-        .catch(async () => request("getAccounts", {
-          purposes: [AddressPurpose.Payment, AddressPurpose.Ordinals],
-          message: "Connect BTC address"
-        }));
+        .catch(async () =>
+          request("getAccounts", {
+            purposes: [AddressPurpose.Payment, AddressPurpose.Ordinals],
+            message: "Connect BTC address",
+          }),
+        );
       const accounts = extractBitcoinAccounts(result);
       if (!accounts[0]?.address) {
         throw new Error("BITCOIN_WALLET_UNAVAILABLE");
@@ -163,7 +209,7 @@ export function LoginMenu() {
       setWallet({
         chain: "bitcoin",
         label: "Bitcoin wallet",
-        address: accounts[0]?.address
+        address: accounts[0]?.address,
       });
       setStatus("Bitcoin wallet connected");
       setOpen(false);
@@ -185,7 +231,9 @@ export function LoginMenu() {
       return;
     }
     if (!privyConfigured) {
-      setStatus("Privy app id is missing. Set NEXT_PUBLIC_PRIVY_APP_ID in the frontend env.");
+      setStatus(
+        "Privy app id is missing. Set NEXT_PUBLIC_PRIVY_APP_ID in the frontend env.",
+      );
       return;
     }
     if (!privyReady) {
@@ -211,19 +259,26 @@ export function LoginMenu() {
     setStatus("Opening StarkZap Cartridge passkey...");
     try {
       const config = await getStarkZapConfig();
-      const cartridge = config.walletEntryPoints.find(item => item.id === "cartridge");
+      const cartridge = (
+        config.walletEntryPoints as Array<{
+          id: string;
+          policies?: { target: string; method: string }[];
+        }>
+      ).find((item) => item.id === "cartridge");
       const { StarkZap, OnboardStrategy } = await import("starkzap");
       const sdk = new StarkZap({
-        network: (config.network || process.env.NEXT_PUBLIC_STARKNET_NETWORK || "sepolia") as "mainnet" | "sepolia",
-        rpcUrl: config.rpcUrl || process.env.NEXT_PUBLIC_STARKNET_RPC_URL
+        network: (config.network ||
+          process.env.NEXT_PUBLIC_STARKNET_NETWORK ||
+          "sepolia") as "mainnet" | "sepolia",
+        rpcUrl: config.rpcUrl || process.env.NEXT_PUBLIC_STARKNET_RPC_URL,
       });
       const onboarded = await sdk.onboard({
         strategy: OnboardStrategy.Cartridge,
         deploy: "if_needed",
         cartridge: {
-          policies: cartridge?.policies ?? []
+          policies: cartridge?.policies ?? [],
         },
-        feeMode: { type: "paymaster" }
+        feeMode: { type: "paymaster" },
       });
       const address = String(onboarded.wallet.address);
       const username = await onboarded.wallet.username?.();
@@ -233,16 +288,16 @@ export function LoginMenu() {
         selectedAddress: address,
         account: {
           address,
-          execute: async calls => {
+          execute: async (calls) => {
             const tx = await onboarded.wallet.execute(calls as never);
             return { transaction_hash: tx.hash };
-          }
-        }
+          },
+        },
       });
       setWallet({
         chain: "cartridge",
         label: username ? `Cartridge ${username}` : "StarkZap Cartridge",
-        address
+        address,
       });
       setStatus(`Connected StarkZap Cartridge ${formatAddress(address)}`);
       setOpen(false);
@@ -255,7 +310,9 @@ export function LoginMenu() {
   function setWallet(wallet: ConnectedWallet) {
     setConnectedWallet(wallet);
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(wallet));
-    window.dispatchEvent(new CustomEvent("bitflowos:wallet", { detail: wallet }));
+    window.dispatchEvent(
+      new CustomEvent("bitflowos:wallet", { detail: wallet }),
+    );
   }
 
   async function connectPrivyThroughStarkZap(userId: string) {
@@ -264,8 +321,10 @@ export function LoginMenu() {
       const walletConfig = await getPrivyStarknetWallet({ userId });
       const { StarkZap, OnboardStrategy } = await import("starkzap");
       const sdk = new StarkZap({
-        network: (process.env.NEXT_PUBLIC_STARKNET_NETWORK ?? "sepolia") as "mainnet" | "sepolia",
-        rpcUrl: process.env.NEXT_PUBLIC_STARKNET_RPC_URL
+        network: (process.env.NEXT_PUBLIC_STARKNET_NETWORK ?? "sepolia") as
+          | "mainnet"
+          | "sepolia",
+        rpcUrl: process.env.NEXT_PUBLIC_STARKNET_RPC_URL,
       });
       const onboarded = await sdk.onboard({
         strategy: OnboardStrategy.Privy,
@@ -275,9 +334,9 @@ export function LoginMenu() {
             walletId: walletConfig.walletId,
             publicKey: walletConfig.publicKey,
             serverUrl: walletConfig.serverUrl,
-            metadata: { address: walletConfig.address }
-          })
-        }
+            metadata: { address: walletConfig.address },
+          }),
+        },
       });
       const address = String(onboarded.wallet.address);
       setRuntimeStarknetWallet({
@@ -286,16 +345,16 @@ export function LoginMenu() {
         selectedAddress: address,
         account: {
           address,
-          execute: async calls => {
+          execute: async (calls) => {
             const tx = await onboarded.wallet.execute(calls as never);
             return { transaction_hash: tx.hash };
-          }
-        }
+          },
+        },
       });
       setWallet({
         chain: "privy",
         label: "StarkZap Privy",
-        address
+        address,
       });
       setStatus(`Connected StarkZap Privy ${formatAddress(address)}`);
     } catch (error) {
@@ -328,17 +387,31 @@ export function LoginMenu() {
       >
         {connectedWallet ? (
           <span className="connected-label">
-            <strong>{connectedWallet.address ? formatAddress(connectedWallet.address) : connectedWallet.label}</strong>
+            <strong>
+              {connectedWallet.address
+                ? formatAddress(connectedWallet.address)
+                : connectedWallet.label}
+            </strong>
             <small>{connectedWallet.label}</small>
           </span>
-        ) : "Login"}
+        ) : (
+          "Login"
+        )}
         <ChevronDown size={14} />
       </button>
 
       {open ? (
         <div className="login-popover">
           <div className="login-popover-head">
-            <strong>{step === "root" ? "Access BitflowOS" : step === "chain" ? "Choose Wallet Chain" : step === "starknet" ? "Starknet Wallets" : "Bitcoin Wallets"}</strong>
+            <strong>
+              {step === "root"
+                ? "Access BitflowOS"
+                : step === "chain"
+                  ? "Choose Wallet Chain"
+                  : step === "starknet"
+                    ? "Starknet Wallets"
+                    : "Bitcoin Wallets"}
+            </strong>
             <button
               aria-label="Close login menu"
               onClick={() => {
@@ -357,7 +430,11 @@ export function LoginMenu() {
                 Connected through {connectedWallet.chain}
                 {connectedWallet.address ? `: ${connectedWallet.address}` : "."}
               </p>
-              <button className="kit-button secondary-kit" onClick={disconnectWallet} type="button">
+              <button
+                className="kit-button secondary-kit"
+                onClick={disconnectWallet}
+                type="button"
+              >
                 Disconnect
               </button>
             </div>
@@ -408,7 +485,11 @@ export function LoginMenu() {
             </div>
           ) : null}
 
-          <div className={`login-status ${isWarningStatus(status) ? "warning" : ""}`}>{status}</div>
+          <div
+            className={`login-status ${isWarningStatus(status) ? "warning" : ""}`}
+          >
+            {status}
+          </div>
         </div>
       ) : null}
     </div>
@@ -420,7 +501,11 @@ function formatBitcoinWalletError(error: unknown) {
   if (/rejected|denied|cancel/i.test(raw)) {
     return "Bitcoin wallet connection was cancelled.";
   }
-  if (/BITCOIN_WALLET_UNAVAILABLE|isProviderSet|undefined|provider|not found/i.test(raw)) {
+  if (
+    /BITCOIN_WALLET_UNAVAILABLE|isProviderSet|undefined|provider|not found/i.test(
+      raw,
+    )
+  ) {
     return "No compatible Bitcoin wallet was detected. Install or unlock Xverse or UniSat, then try again.";
   }
   return "Bitcoin wallet connection could not be completed. Open Xverse or UniSat and try again.";
@@ -452,7 +537,9 @@ function formatCartridgeStarkZapError(error: unknown) {
 }
 
 function isWarningStatus(value: string) {
-  return /No compatible Bitcoin|could not|not available|cancelled|missing|failed|try again|not configured|requires|origin|certificate|http:\/\/localhost|https/i.test(value);
+  return /No compatible Bitcoin|could not|not available|cancelled|missing|failed|try again|not configured|requires|origin|certificate|http:\/\/localhost|https/i.test(
+    value,
+  );
 }
 
 function getLoginContextProblem(label: string) {
