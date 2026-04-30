@@ -18,7 +18,7 @@ export async function proxyPaymasterRequest(
   if (!config.avnuPaymasterNodeUrl) {
     throw new Error("AVNU paymaster node URL is not configured");
   }
-  if (!config.avnuApiKey) {
+  if (!config.avnuPaymasterApiKey) {
     throw new Error("AVNU API key is not configured");
   }
 
@@ -26,7 +26,7 @@ export async function proxyPaymasterRequest(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-paymaster-api-key": config.avnuApiKey,
+      "x-paymaster-api-key": config.avnuPaymasterApiKey,
     },
     body: JSON.stringify(body),
   });
@@ -46,7 +46,7 @@ export async function proxyPaymasterRequest(
  * Returns true if the key is accepted, false otherwise.
  */
 export async function isAvnuApiKeyValid(config: AppConfig): Promise<boolean> {
-  if (!config.avnuPaymasterNodeUrl || !config.avnuApiKey) {
+  if (!config.avnuPaymasterNodeUrl || !config.avnuPaymasterApiKey) {
     return false;
   }
 
@@ -55,7 +55,7 @@ export async function isAvnuApiKeyValid(config: AppConfig): Promise<boolean> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-paymaster-api-key": config.avnuApiKey,
+        "x-paymaster-api-key": config.avnuPaymasterApiKey,
       },
       body: JSON.stringify({
         jsonrpc: "2.0",

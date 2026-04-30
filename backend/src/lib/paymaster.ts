@@ -43,8 +43,8 @@ export async function executeSponsoredCalls(
     config.avnuPaymasterNodeUrl
       ? {
           nodeUrl: config.avnuPaymasterNodeUrl,
-          ...(config.avnuApiKey
-            ? { headers: { "x-paymaster-api-key": config.avnuApiKey } }
+          ...(config.avnuPaymasterApiKey
+            ? { headers: { "x-paymaster-api-key": config.avnuPaymasterApiKey } }
             : {}),
         }
       : undefined;
