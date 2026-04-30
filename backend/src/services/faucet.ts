@@ -38,7 +38,8 @@ export class FaucetService {
       throw new Error(`${FAUCET_TOKEN_SYMBOL} is not enabled in backend token config.`);
     }
 
-    const [amountLow, amountHigh] = toUint256Calldata(BigInt(FAUCET_AMOUNT));
+    const faucetAmountBaseUnits = BigInt(FAUCET_AMOUNT) * 10n ** BigInt(token.decimals);
+    const [amountLow, amountHigh] = toUint256Calldata(faucetAmountBaseUnits);
     const provider = new RpcProvider({ nodeUrl: this.config.starknetRpcUrl });
     const account = new Account({
       provider,

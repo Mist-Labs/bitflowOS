@@ -217,17 +217,9 @@ function parseTokenConfig(raw: string, network: SupportedNetwork): Record<string
     Object.entries(parsed).map(([key, token]) => [key.toUpperCase(), {
       ...token,
       symbol: (token.symbol ?? key).toUpperCase(),
-      decimals: normalizeTokenDecimals({ ...token, symbol: token.symbol ?? key }, network)
+      decimals: token.decimals
     }])
   );
-}
-
-function normalizeTokenDecimals(token: Pick<TokenConfig, "symbol" | "decimals" | "kind">, network: SupportedNetwork): number {
-  const symbol = token.symbol.toUpperCase();
-  const isDemoIntegerToken = network !== "mainnet"
-    && token.kind === "mock"
-    && symbol === "SBTC_TEST";
-  return isDemoIntegerToken ? 0 : token.decimals;
 }
 
 function parseStrategyRoutes(raw: string): Record<string, StrategyRouteConfig> {
