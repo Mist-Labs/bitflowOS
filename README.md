@@ -117,6 +117,8 @@ The Agent Terminal is the product's guided allocation surface. It:
 
 The agent persists pending confirmation state per wallet in browser storage so refreshing the page does not immediately restart the allocation sequence.
 
+If a connected Starknet wallet has no test BTC wrapper balance, the agent can mint a demo `SBTC_TEST` token through the built-in faucet so the user can test the deposit and allocation flow.
+
 ### Kimi AI Allocation
 
 When `KIMI_API_KEY` is set, the backend calls Kimi through Moonshot-compatible chat completions. The model returns strict JSON containing:
