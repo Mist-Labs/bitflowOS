@@ -328,7 +328,7 @@ export function LoginMenu() {
       });
       const onboarded = await sdk.onboard({
         strategy: OnboardStrategy.Privy,
-        deploy: "never",
+        deploy: "if_needed",
         privy: {
           resolve: async () => ({
             walletId: walletConfig.walletId,
